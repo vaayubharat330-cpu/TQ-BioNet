@@ -119,14 +119,15 @@ def load_datasets():
     )
     return X_dev, y_dev, groups_dev, coords_dev, subsets_dev, X_val, y_val, groups_val, coords_val, subsets_val
 
-def verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val):
-    dev_patients = set(groups_dev)
-    val_patients = set(groups_val)
-    patient_overlap = dev_patients.intersection(val_patients)
-    print("Patients in development:", len(dev_patients))
-    print("Patients in validation (subset 6):", len(val_patients))
-    print("Patient overlap count:", len(patient_overlap))
-    print("PASS" if len(patient_overlap) == 0 else "FAIL", "- patient overlap")
+def verify_data_separation(X_dev, groups_dev, subsets_dev, X_val, groups_val, subsets_val):
+    dev_seriesuids = set(groups_dev)
+    val_seriesuids = set(groups_val)
+    series_overlap = dev_seriesuids.intersection(val_seriesuids)
+    print("SeriesUIDs in development:", len(dev_seriesuids))
+    print("SeriesUIDs in validation:", len(val_seriesuids))
+    print("SeriesUID overlap count:", len(series_overlap))
+    if series_overlap:
+        raise RuntimeError("SeriesUID overlap detected between development and validation")
 
     dev_subset_ids = set(np.unique(subsets_dev).tolist())
     val_subset_ids = set(np.unique(subsets_val).tolist())
@@ -139,17 +140,13 @@ def verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val):
     print("SeriesUID overlap count:", len(series_overlap))
     print("PASS" if len(series_overlap) == 0 else "FAIL", "- SeriesUID separation (not proof of patient-level separation)")
 
-    dev_dupes = len(groups_dev) != len(set(groups_dev))
-    val_dupes = len(groups_val) != len(set(groups_val))
-    print("Duplicate samples in development:", dev_dupes)
-    print("Duplicate samples in validation:", val_dupes)
-    print("PASS" if not dev_dupes and not val_dupes else "FAIL", "- duplicate detection")
-
+    if len(X_dev) != len(groups_dev) or len(X_val) != len(groups_val):
+        raise RuntimeError("Feature/group row counts do not align")
     print("Development X shape:", X_dev.shape)
     print("Validation X shape:", X_val.shape)
-    print("NaNs in development X:", np.isnan(X_dev).any())
-    print("NaNs in validation X:", np.isnan(X_val).any())
-    print("PASS" if not np.isnan(X_dev).any() and not np.isnan(X_val).any() else "FAIL", "- NaN check")
+    if not np.isfinite(X_dev).all() or not np.isfinite(X_val).all():
+        raise RuntimeError("Non-finite feature values found in development or validation data")
+    print("PASS - feature arrays are finite and aligned with group IDs")
 
 # ------------------------------------------------------------
 # 3. Scaler leakage verification
@@ -446,7 +443,7 @@ if __name__ == "__main__":
     start = time.time()
     conf = verify_frozen_configuration()
     X_dev, y_dev, groups_dev, coords_dev, subsets_dev, X_val, y_val, groups_val, coords_val, subsets_val = load_datasets()
-    verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val)
+    verify_data_separation(X_dev, groups_dev, subsets_dev, X_val, groups_val, subsets_val)
     sel_idx = [conf["all_features"].index(f) for f in conf["selected_features"]]
     X_dev_sel = X_dev[:, sel_idx]
     X_val_sel = X_val[:, sel_idx]
