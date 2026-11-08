@@ -21,6 +21,7 @@ import subprocess
 warnings.filterwarnings('ignore', category=UserWarning, module='ripser')
 
 from tq_bionet.pipeline import extract_tq_bio_features
+from tq_bionet.data_loader import extract_3d_patch
 from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, plot_roc_pr_curves
 
 def get_git_commit():
@@ -282,22 +283,8 @@ def process_and_save_subset(subset_idx):
             
             z_vox, y_vox, x_vox = voxel_coords[2], voxel_coords[1], voxel_coords[0]
             
-            z_min = max(0, z_vox - half_size)
-            z_max = min(np_image.shape[0], z_vox + half_size)
-            y_min = max(0, y_vox - half_size)
-            y_max = min(np_image.shape[1], y_vox + half_size)
-            x_min = max(0, x_vox - half_size)
-            x_max = min(np_image.shape[2], x_vox + half_size)
-            
-            patch = np_image[z_min:z_max, y_min:y_max, x_min:x_max]
-            
-            if patch.shape != (32, 32, 32):
-                padded = np.zeros((32, 32, 32))
-                dz = min(32, patch.shape[0])
-                dy = min(32, patch.shape[1])
-                dx = min(32, patch.shape[2])
-                padded[:dz, :dy, :dx] = patch[:dz, :dy, :dx]
-                patch = padded
+            # Extract 32x32x32 patch centered at voxel_coords with -1000 HU (air) padding
+            patch = extract_3d_patch(np_image, (z_vox, y_vox, x_vox), patch_size=32, fill_value=-1000.0)
                 
             median_val = np.median(patch)
             iqr_val = np.percentile(patch, 75) - np.percentile(patch, 25)
