@@ -40,7 +40,7 @@ def run_independent_validation():
     print(f"Verifying caches for independent validation subsets: {validation_subsets}...")
     for idx in validation_subsets:
         # Cache path check
-        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{idx}")
+        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{idx}")
         metadata_path = os.path.join(cache_dir, "metadata.json")
         if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
             print(f"   Subset {idx} cache verified.")
@@ -232,14 +232,14 @@ def run_independent_validation():
         "phase": "Independent Validation",
         "date": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "git_commit": get_git_commit(),
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": 42,
         "subset_list": validation_subsets,
         "sample_count": int(len(y_val)),
         "feature_dimension": 15,
         "cache_hashes": {
-            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{i}", "X.npy"))
+            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{i}", "X.npy"))
             for i in validation_subsets
         },
         "runtime_evaluation_sec": float(runtime_duration)
