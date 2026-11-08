@@ -23,7 +23,17 @@ from tq_bionet.scale_clinical_validation import (
     get_git_commit
 )
 from tq_bionet.pipeline import extract_tq_bio_features
-from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci
+from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, compute_cluster_bootstrap_ci
+from tq_bionet.model_config import (
+    FROZEN_31_FEATURES,
+    FROZEN_15_SELECTED_FEATURES,
+    prune_to_selected_features,
+    fit_frozen_pipeline,
+    predict_ensemble,
+    compute_calibration_metrics,
+    save_pipeline_bundle,
+    DEFAULT_DECISION_THRESHOLD
+)
 
 def run_independent_validation():
     print("======================================================================")
@@ -34,6 +44,8 @@ def run_independent_validation():
     
     project_root = Path(__file__).resolve().parent
     data_dir_c = str(project_root / "luna16_data")
+    outputs_dir = project_root / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
     
     # Check/Download/Process subsets 6, 7, 8, 9
     validation_subsets = [6, 7, 8, 9]
@@ -79,61 +91,30 @@ def run_independent_validation():
     X_val, y_val, groups_val, coords_val, subsets_val = reconstruct_combined_dataset(validation_subsets, data_dir_c)
     print(f"   Independent validation cohort size: {len(X_val)} samples")
     
-    # 3. Dynamic Feature Selection (Prune to 15 frozen features)
-    dummy_patch = np.zeros((16, 16, 16))
-    dummy_dict, _ = extract_tq_bio_features(dummy_patch)
-    sorted_keys = sorted([k for k in dummy_dict.keys() if k != 'extraction_time_sec'])
-    
-    locked_feature_names = [
-        'H0_entropy',
-        'H0_total_persistence',
-        'H1_count',
-        'H1_total_persistence',
-        'blobness_ratio',
-        'fractal_dimension',
-        'hessian_L1',
-        'hessian_L2',
-        'hessian_L3',
-        'lacunarity_4',
-        'lacunarity_8',
-        'quantum_eigenvalue_0',
-        'quantum_eigenvalue_1',
-        'quantum_eigenvalue_2',
-        'vesselness_ratio'
-    ]
-    selected_indices = [sorted_keys.index(name) for name in locked_feature_names]
-    
-    X_dev_pruned = X_dev[:, selected_indices]
-    X_val_pruned = X_val[:, selected_indices]
-    
-    # 4. Fit Preprocessing standardizer on Development Cohort
-    scaler = StandardScaler()
-    X_dev_scaled = scaler.fit_transform(X_dev_pruned)
-    X_val_scaled = scaler.transform(X_val_pruned)
-    
-    # 5. Fit Frozen Classifiers on full Development Cohort
+    # 3. Feature Selection: Prune to 15 frozen features using central model_config
+    X_dev_pruned = prune_to_selected_features(X_dev)
+    X_val_pruned = prune_to_selected_features(X_val)
+
+    # 4 & 5. Fit Frozen Classifiers on full Development Cohort
     print("\nTraining frozen SVM, XGBoost, and RF classifiers on the full development cohort...")
-    svm = SVC(C=100.0, gamma='scale', probability=True, random_state=42)
-    xgb = XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.01, eval_metric='logloss', random_state=42)
-    rf = RandomForestClassifier(n_estimators=150, max_depth=4, random_state=42)
-    
-    svm.fit(X_dev_scaled, y_dev)
-    xgb.fit(X_dev_pruned, y_dev)
-    rf.fit(X_dev_pruned, y_dev)
-    
-    # 6. Evaluate on Independent Validation Cohort
+    svm, xgb, rf, scaler = fit_frozen_pipeline(X_dev_pruned, y_dev, random_state=42)
+
+    # Save frozen pipeline bundle
+    save_pipeline_bundle(outputs_dir / "frozen_v3_1_pipeline", svm, xgb, rf, scaler)
+
+    # 6. Evaluate on Independent Validation Cohort using predict_ensemble
     print("Evaluating models on independent validation cohort...")
-    svm_probs = svm.predict_proba(X_val_scaled)[:, 1]
-    xgb_probs = xgb.predict_proba(X_val_pruned)[:, 1]
-    rf_probs = rf.predict_proba(X_val_pruned)[:, 1]
+    preds_dict = predict_ensemble(svm, xgb, rf, scaler, X_val_pruned, threshold=DEFAULT_DECISION_THRESHOLD)
+    svm_probs = preds_dict['svm_prob']
+    xgb_probs = preds_dict['xgb_prob']
+    rf_probs = preds_dict['rf_prob']
+    ensemble_probs = preds_dict['ensemble_prob']
+    ensemble_preds = preds_dict['y_pred']
+    svm_preds = (svm_probs >= DEFAULT_DECISION_THRESHOLD).astype(int)
+    xgb_preds = (xgb_probs >= DEFAULT_DECISION_THRESHOLD).astype(int)
     
-    ensemble_probs = (svm_probs + xgb_probs + rf_probs) / 3.0
-    ensemble_preds = (ensemble_probs >= 0.5).astype(int)
-    svm_preds = (svm_probs >= 0.5).astype(int)
-    xgb_preds = (xgb_probs >= 0.5).astype(int)
-    
-    # Calculate performance metrics
-    def evaluate_model(y_true, y_pred, y_prob):
+    # Calculate performance metrics with scan-cluster bootstrap intervals and calibration
+    def evaluate_model(y_true, y_pred, y_prob, groups=None):
         acc = accuracy_score(y_true, y_pred)
         sens = recall_score(y_true, y_pred) if np.sum(y_true == 1) > 0 else 0.0
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
@@ -141,29 +122,38 @@ def run_independent_validation():
         prec = precision_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
         auc_val = roc_auc_score(y_true, y_prob) if len(np.unique(y_true)) > 1 else 0.5
+
+        cal = compute_calibration_metrics(y_true, y_prob)
         
-        # Calculate Wilson and Bootstrap CIs
-        acc_low, acc_high = compute_wilson_ci(int(np.sum(y_pred == y_true)), len(y_true))
+        # Scan-cluster bootstrap confidence intervals when scan groups provided
+        if groups is not None and len(np.unique(groups)) > 1:
+            auc_ci = compute_cluster_bootstrap_ci(y_true, y_prob, groups, roc_auc_score)
+            f1_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, f1_score)
+            acc_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, accuracy_score)
+        else:
+            auc_ci = compute_bootstrap_ci(y_true, y_prob, roc_auc_score)
+            f1_ci = compute_bootstrap_ci(y_true, y_pred, f1_score)
+            acc_ci = compute_wilson_ci(int(np.sum(y_pred == y_true)), len(y_true))
+
         sens_low, sens_high = compute_wilson_ci(int(np.sum((y_pred == 1) & (y_true == 1))), int(np.sum(y_true == 1)))
         spec_low, spec_high = compute_wilson_ci(int(np.sum((y_pred == 0) & (y_true == 0))), int(np.sum(y_true == 0)))
         prec_low, prec_high = compute_wilson_ci(int(np.sum((y_pred == 1) & (y_true == 1))), int(np.sum(y_pred == 1)))
         
-        f1_low, f1_high = compute_bootstrap_ci(y_true, y_pred, f1_score)
-        auc_low, auc_high = compute_bootstrap_ci(y_true, y_prob, roc_auc_score)
-        
         return {
-            "accuracy": acc, "accuracy_ci": (acc_low, acc_high),
+            "accuracy": acc, "accuracy_ci": acc_ci,
             "sensitivity": sens, "sensitivity_ci": (sens_low, sens_high),
             "specificity": spec, "specificity_ci": (spec_low, spec_high),
             "precision": prec, "precision_ci": (prec_low, prec_high),
-            "f1": f1, "f1_ci": (f1_low, f1_high),
-            "auc": auc_val, "auc_ci": (auc_low, auc_high),
+            "f1": f1, "f1_ci": f1_ci,
+            "auc": auc_val, "auc_ci": auc_ci,
+            "brier_score": cal["brier_score"],
+            "expected_calibration_error": cal["expected_calibration_error"],
             "cm": {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)}
         }
         
-    metrics_ens = evaluate_model(y_val, ensemble_preds, ensemble_probs)
-    metrics_svm = evaluate_model(y_val, svm_preds, svm_probs)
-    metrics_xgb = evaluate_model(y_val, xgb_preds, xgb_probs)
+    metrics_ens = evaluate_model(y_val, ensemble_preds, ensemble_probs, groups=groups_val)
+    metrics_svm = evaluate_model(y_val, svm_preds, svm_probs, groups=groups_val)
+    metrics_xgb = evaluate_model(y_val, xgb_preds, xgb_probs, groups=groups_val)
     
     # 7. Outputs Save & Cleanup
     outputs_dir = project_root / "outputs"
@@ -175,9 +165,9 @@ def run_independent_validation():
     for sub in validation_subsets:
         mask = (subsets_val == sub)
         if np.sum(mask) > 0:
-            m_ens = evaluate_model(y_val[mask], ensemble_preds[mask], ensemble_probs[mask])
-            m_svm = evaluate_model(y_val[mask], svm_preds[mask], svm_probs[mask])
-            m_xgb = evaluate_model(y_val[mask], xgb_preds[mask], xgb_probs[mask])
+            m_ens = evaluate_model(y_val[mask], ensemble_preds[mask], ensemble_probs[mask], groups=groups_val[mask])
+            m_svm = evaluate_model(y_val[mask], svm_preds[mask], svm_probs[mask], groups=groups_val[mask])
+            m_xgb = evaluate_model(y_val[mask], xgb_preds[mask], xgb_probs[mask], groups=groups_val[mask])
             
             sub_dict = {
                 "SVM": {k: v for k, v in m_svm.items() if k != "cm"},
@@ -253,15 +243,15 @@ def run_independent_validation():
         json.dump(manifest_val, f, indent=4)
         
     # Save validation summary markdown
-    summary_md = f"""# TQ-BioNet v3.0 Independent Validation Summary
+    summary_md = f"""# TQ-BioNet v3.1 Independent Validation Summary
 
-This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.0 framework on the completely unseen independent validation cohort (Subsets 6–9).
+This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the completely unseen independent validation cohort (Subsets 6–9).
 
 ## Validation Scope
 - **Validation Date**: {manifest_val["date"]} UTC
 - **Development Cohort**: Subsets 0–5 (1446 samples) - Used for classifier training
 - **Validation Cohort**: Subsets 6–9 ({len(y_val)} samples) - Used for validation testing
-- **Feature Pipeline Version**: v3.0 (Isotropic 1.0mm, Local Z-Score IQR Preprocessing)
+- **Feature Pipeline Version**: v3.1 (Isotropic 1.0mm, Local Z-Score IQR Preprocessing)
 - **Features Pruned**: 15 key biophysical/topological features
 
 ## Independent Validation Cohort Metrics (Combined Subsets 6–9)

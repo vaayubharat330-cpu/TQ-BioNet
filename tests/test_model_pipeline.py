@@ -1,6 +1,9 @@
 import unittest
+import tempfile
+import shutil
+from pathlib import Path
 import numpy as np
-from sklearn.metrics import brier_score_loss
+from sklearn.metrics import brier_score_loss, roc_auc_score
 
 from tq_bionet.model_config import (
     FROZEN_31_FEATURES,
@@ -11,14 +14,17 @@ from tq_bionet.model_config import (
     fit_frozen_pipeline,
     predict_ensemble,
     compute_calibration_metrics,
+    save_pipeline_bundle,
+    load_pipeline_bundle,
     DEFAULT_DECISION_THRESHOLD
 )
+from tq_bionet.evaluation_metrics import compute_cluster_bootstrap_ci
 
 
 class TestModelPipelineStage4(unittest.TestCase):
     """
     Stage 4 Verification: Frozen feature schema, model scaling contracts,
-    ensemble voting, and probability calibration diagnostics.
+    ensemble voting, probability calibration diagnostics, and pipeline bundle serialization.
     """
 
     def test_feature_schema_and_selection_contract(self):
@@ -78,41 +84,30 @@ class TestModelPipelineStage4(unittest.TestCase):
         N_train = 60
         N_test = 25
         
-        # Create synthetic dev features with distinct scales per feature
         X_train = rng.normal(loc=10.0, scale=5.0, size=(N_train, 15))
         y_train = rng.randint(0, 2, size=N_train)
-        
         X_test = rng.normal(loc=10.0, scale=5.0, size=(N_test, 15))
         
         svm, xgb, rf, scaler = fit_frozen_pipeline(X_train, y_train, random_state=42)
         
-        # Scaler check
         np.testing.assert_allclose(scaler.mean_, np.mean(X_train, axis=0))
         np.testing.assert_allclose(scaler.scale_, np.std(X_train, axis=0))
         
-        # Run prediction
         res = predict_ensemble(svm, xgb, rf, scaler, X_test, threshold=DEFAULT_DECISION_THRESHOLD)
-        
         p_svm = res['svm_prob']
         p_xgb = res['xgb_prob']
         p_rf = res['rf_prob']
         p_ens = res['ensemble_prob']
         y_pred = res['y_pred']
         
-        # Probabilities must be in [0, 1]
         self.assertTrue(np.all((p_ens >= 0.0) & (p_ens <= 1.0)))
-        
-        # Soft voting arithmetic check
         expected_p_ens = (p_svm + p_xgb + p_rf) / 3.0
         np.testing.assert_allclose(p_ens, expected_p_ens, rtol=1e-7, atol=1e-7)
-        
-        # Decision threshold check
         expected_y_pred = (expected_p_ens >= DEFAULT_DECISION_THRESHOLD).astype(int)
         np.testing.assert_array_equal(y_pred, expected_y_pred)
 
     def test_calibration_diagnostics(self):
         """Verifies calculation of Brier score and Expected Calibration Error (ECE)."""
-        # Perfect calibration case: probabilities match ground truth perfectly
         y_true_perf = np.array([0, 0, 0, 1, 1, 1])
         y_prob_perf = np.array([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
         
@@ -120,21 +115,71 @@ class TestModelPipelineStage4(unittest.TestCase):
         self.assertAlmostEqual(cal_perf['brier_score'], 0.0, places=6)
         self.assertAlmostEqual(cal_perf['expected_calibration_error'], 0.0, places=6)
         
-        # Non-trivial probabilistic case
         y_true = np.array([0, 1, 1, 0, 1, 0, 0, 1, 1, 0])
         y_prob = np.array([0.1, 0.85, 0.7, 0.3, 0.9, 0.2, 0.4, 0.65, 0.8, 0.15])
         
         cal = compute_calibration_metrics(y_true, y_prob, n_bins=5)
-        
-        # Verify Brier score matches standard library
         expected_brier = brier_score_loss(y_true, y_prob)
         self.assertAlmostEqual(cal['brier_score'], expected_brier, places=6)
-        
-        # ECE must be strictly bounded in [0, 1]
         self.assertGreaterEqual(cal['expected_calibration_error'], 0.0)
         self.assertLessEqual(cal['expected_calibration_error'], 1.0)
         self.assertEqual(len(cal['bin_accuracies']), 5)
         self.assertEqual(len(cal['bin_confidences']), 5)
+
+    def test_calibration_input_validation(self):
+        """Verifies robust rejection of non-finite, out-of-range, and malformed inputs."""
+        y_t = np.array([0, 1, 1])
+        # Probability out of bounds (<0 or >1)
+        with self.assertRaises(ValueError):
+            compute_calibration_metrics(y_t, np.array([0.2, 1.2, 0.5]))
+        with self.assertRaises(ValueError):
+            compute_calibration_metrics(y_t, np.array([-0.1, 0.5, 0.5]))
+        # Non-finite probability
+        with self.assertRaises(ValueError):
+            compute_calibration_metrics(y_t, np.array([0.2, np.nan, 0.5]))
+        # Non-binary labels
+        with self.assertRaises(ValueError):
+            compute_calibration_metrics(np.array([0, 2, 1]), np.array([0.2, 0.5, 0.5]))
+        # Invalid n_bins
+        with self.assertRaises(ValueError):
+            compute_calibration_metrics(y_t, np.array([0.2, 0.5, 0.5]), n_bins=1)
+
+    def test_pipeline_bundle_persistence(self):
+        """Verifies saving and loading pipeline bundle with artifact hashes and provenance."""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            rng = np.random.RandomState(42)
+            X = rng.normal(size=(30, 15))
+            y = rng.randint(0, 2, size=30)
+            svm, xgb, rf, scaler = fit_frozen_pipeline(X, y)
+            
+            manifest = save_pipeline_bundle(temp_dir, svm, xgb, rf, scaler, metadata={"test_run": True})
+            self.assertEqual(manifest["pipeline_version"], "v3.1")
+            self.assertTrue("artifact_hashes" in manifest)
+            
+            # Load bundle back
+            svm_l, xgb_l, rf_l, scaler_l, man_l = load_pipeline_bundle(temp_dir)
+            self.assertEqual(man_l["pipeline_version"], "v3.1")
+            
+            # Predictions from loaded bundle must match exactly
+            p1 = predict_ensemble(svm, xgb, rf, scaler, X[:5])["ensemble_prob"]
+            p2 = predict_ensemble(svm_l, xgb_l, rf_l, scaler_l, X[:5])["ensemble_prob"]
+            np.testing.assert_allclose(p1, p2)
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def test_cluster_bootstrap_confidence_intervals(self):
+        """Verifies scan-cluster bootstrap resamples whole scans instead of single rows."""
+        rng = np.random.RandomState(42)
+        y_true = np.array([0, 0, 1, 1, 0, 1, 0, 1])
+        y_prob = np.array([0.1, 0.2, 0.8, 0.9, 0.3, 0.7, 0.15, 0.85])
+        # 4 distinct scans with 2 candidates each
+        groups = np.array(["scan1", "scan1", "scan2", "scan2", "scan3", "scan3", "scan4", "scan4"])
+        
+        low, high = compute_cluster_bootstrap_ci(y_true, y_prob, groups, roc_auc_score, num_resamples=50)
+        self.assertGreaterEqual(low, 0.0)
+        self.assertLessEqual(high, 1.0)
+        self.assertLessEqual(low, high)
 
 
 if __name__ == "__main__":

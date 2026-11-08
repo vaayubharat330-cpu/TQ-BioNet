@@ -64,13 +64,19 @@ def download_and_extract_subset(subset_idx):
             time.sleep(10)
         print(f"   Download completed by concurrent downloader.")
 
-    # If the zip file already exists, verify its size is valid (>5 GB) before skipping download
+    # Verify archive integrity via CRC32 testzip before skipping download
     if os.path.exists(zip_path):
-        size_gb = os.path.getsize(zip_path) / (1024**3)
-        if size_gb > 5.0:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' already exists ({size_gb:.2f} GB), skipping download. Proceeding directly to extraction.")
+        is_valid_zip = False
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                is_valid_zip = (zf.testzip() is None)
+        except Exception:
+            is_valid_zip = False
+
+        if is_valid_zip:
+            print(f"\n[STEP 1] Zip archive '{zip_path}' verified via CRC32 checksum, skipping download. Proceeding directly to extraction.")
         else:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' exists but is corrupt ({size_gb:.2f} GB < 5 GB). Deleting and redownloading...")
+            print(f"\n[STEP 1] Zip archive '{zip_path}' is corrupt/incomplete. Deleting and redownloading...")
             try:
                 os.remove(zip_path)
             except Exception as e:
@@ -132,8 +138,14 @@ def download_and_extract_subset(subset_idx):
     print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
     start_ex = time.time()
     try:
+        target_dir = Path(data_dir_d).resolve()
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(data_dir_d)
+            # Audit archive against Zip Slip path traversal
+            for member in zip_ref.infolist():
+                member_path = (target_dir / member.filename).resolve()
+                if not str(member_path).startswith(str(target_dir)):
+                    raise RuntimeError(f"Zip slip path traversal detected: {member.filename}")
+            zip_ref.extractall(target_dir)
         print(f"   Extraction completed in {time.time() - start_ex:.1f} seconds.")
     except Exception as e:
         print(f"   Extraction failed: {e}")
@@ -432,6 +444,13 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
 def run_retraining():
     import json
     from pathlib import Path
+    from tq_bionet.model_config import (
+        prune_to_selected_features,
+        fit_frozen_pipeline,
+        predict_ensemble,
+        compute_calibration_metrics,
+        DEFAULT_DECISION_THRESHOLD
+    )
     project_root = Path(__file__).resolve().parent.parent
     data_dir_c = str(project_root / "luna16_data")
     
@@ -501,23 +520,12 @@ def run_retraining():
     print(f"   Train set   : {len(X_train)} samples (from {len(train_patients)} scans)")
     print(f"   Test set    : {len(X_test)} samples (from {len(test_patients)} scans)")
     
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    svm = SVC(C=100.0, gamma='scale', probability=True, random_state=42)
-    xgb = XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.01, eval_metric='logloss', random_state=42)
-    rf = RandomForestClassifier(n_estimators=150, max_depth=4, random_state=42)
-    
-    svm.fit(X_train_scaled, y_train)
-    xgb.fit(X_train, y_train)
-    rf.fit(X_train, y_train)
-    
-    svm_probs = svm.predict_proba(X_test_scaled)[:, 1]
-    xgb_probs = xgb.predict_proba(X_test)[:, 1]
-    rf_probs = rf.predict_proba(X_test)[:, 1]
-    
-    ensemble_probs = (svm_probs + xgb_probs + rf_probs) / 3.0
+    svm, xgb, rf, scaler = fit_frozen_pipeline(X_train, y_train, random_state=42)
+    pred_res = predict_ensemble(svm, xgb, rf, scaler, X_test, threshold=DEFAULT_DECISION_THRESHOLD)
+    svm_probs = pred_res['svm_prob']
+    xgb_probs = pred_res['xgb_prob']
+    rf_probs = pred_res['rf_prob']
+    ensemble_probs = pred_res['ensemble_prob']
     
     train_pos = np.sum(y_train == 1)
     train_neg = np.sum(y_train == 0)

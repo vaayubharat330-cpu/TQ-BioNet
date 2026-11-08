@@ -7,11 +7,13 @@ Single source of truth for:
 - Authoritative classifier hyperparameters (SVM, XGBoost, Random Forest)
 - Scaler contract: SVM strictly on StandardScaler, Trees strictly on raw features
 - Ensemble voting and decision threshold
-- Probability calibration metrics (Brier score, ECE, calibration curves)
+- Probability calibration metrics (Brier score, ECE, reliability curves)
 - Model artifact serialization with provenance manifest
 """
 
+import os
 import json
+import joblib
 import hashlib
 import numpy as np
 from pathlib import Path
@@ -172,7 +174,7 @@ def predict_ensemble(svm, xgb, rf, scaler, X_selected, threshold=DEFAULT_DECISIO
 
 def compute_calibration_metrics(y_true, y_prob, n_bins=10):
     """
-    Computes rigorous calibration diagnostics:
+    Computes rigorous calibration diagnostics with full input validation:
     - Brier score: Mean squared error of probabilities relative to outcomes
     - Expected Calibration Error (ECE): Weighted average difference between confidence and accuracy
     - Reliability curve bin coordinates
@@ -181,13 +183,23 @@ def compute_calibration_metrics(y_true, y_prob, n_bins=10):
     y_prob = np.asarray(y_prob, dtype=np.float64)
     if len(y_true) != len(y_prob):
         raise ValueError("y_true and y_prob must have identical lengths")
+    if len(y_true) == 0:
+        raise ValueError("y_true and y_prob must not be empty")
+    if not np.all(np.isfinite(y_prob)):
+        raise ValueError("y_prob must contain only finite numbers")
+    if np.any(y_prob < 0.0) or np.any(y_prob > 1.0):
+        raise ValueError("y_prob values must be strictly in the range [0.0, 1.0]")
+    if not np.all(np.isin(y_true, [0, 1])):
+        raise ValueError("y_true must contain only binary labels (0 or 1)")
+    if not isinstance(n_bins, (int, np.integer)) or n_bins < 2:
+        raise ValueError("n_bins must be an integer >= 2")
 
     brier = float(brier_score_loss(y_true, y_prob))
 
     # Compute ECE and reliability points
     bins = np.linspace(0.0, 1.0, n_bins + 1)
     bin_indices = np.digitize(y_prob, bins) - 1
-    # Clip index 10 to bin 9
+    # Clip index n_bins to bin n_bins - 1
     bin_indices = np.clip(bin_indices, 0, n_bins - 1)
 
     bin_accuracies = []
@@ -217,3 +229,73 @@ def compute_calibration_metrics(y_true, y_prob, n_bins=10):
         'bin_confidences': bin_confidences,
         'bin_counts': bin_counts
     }
+
+
+def save_pipeline_bundle(output_dir, svm, xgb, rf, scaler, metadata=None):
+    """
+    Saves the entire trained pipeline bundle with full provenance:
+    - Estimators and scaler serialized via joblib
+    - Manifest with feature schema, threshold, git commit, package versions, and SHA256 hashes
+    """
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    joblib.dump(scaler, out_path / "scaler.joblib")
+    joblib.dump(svm, out_path / "svm_model.joblib")
+    joblib.dump(xgb, out_path / "xgb_model.joblib")
+    joblib.dump(rf, out_path / "rf_model.joblib")
+
+    import sklearn
+    import scipy
+
+    manifest = {
+        "pipeline_version": "v3.1",
+        "full_features_31": FROZEN_31_FEATURES,
+        "selected_features_15": FROZEN_15_SELECTED_FEATURES,
+        "decision_threshold": DEFAULT_DECISION_THRESHOLD,
+        "package_versions": {
+            "scikit-learn": sklearn.__version__,
+            "xgboost": xgb.__class__.__module__,
+            "scipy": scipy.__version__,
+            "numpy": np.__version__
+        },
+        "artifact_hashes": {
+            "scaler": hashlib.sha256((out_path / "scaler.joblib").read_bytes()).hexdigest(),
+            "svm": hashlib.sha256((out_path / "svm_model.joblib").read_bytes()).hexdigest(),
+            "xgb": hashlib.sha256((out_path / "xgb_model.joblib").read_bytes()).hexdigest(),
+            "rf": hashlib.sha256((out_path / "rf_model.joblib").read_bytes()).hexdigest()
+        }
+    }
+    if metadata:
+        manifest["metadata"] = metadata
+
+    manifest_file = out_path / "pipeline_manifest.json"
+    with manifest_file.open("w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+
+    return manifest
+
+
+def load_pipeline_bundle(bundle_dir):
+    """Loads a previously saved pipeline bundle and verifies manifest integrity."""
+    in_path = Path(bundle_dir)
+    manifest_file = in_path / "pipeline_manifest.json"
+    if not manifest_file.exists():
+        raise FileNotFoundError(f"Manifest not found in bundle: {bundle_dir}")
+
+    with manifest_file.open("r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    # Verify hashes
+    for key, expected_hash in manifest.get("artifact_hashes", {}).items():
+        fname = f"{key}_model.joblib" if key != "scaler" else "scaler.joblib"
+        actual_hash = hashlib.sha256((in_path / fname).read_bytes()).hexdigest()
+        if actual_hash != expected_hash:
+            raise ValueError(f"Hash mismatch on {fname}: expected {expected_hash}, got {actual_hash}")
+
+    scaler = joblib.load(in_path / "scaler.joblib")
+    svm = joblib.load(in_path / "svm_model.joblib")
+    xgb = joblib.load(in_path / "xgb_model.joblib")
+    rf = joblib.load(in_path / "rf_model.joblib")
+
+    return svm, xgb, rf, scaler, manifest
