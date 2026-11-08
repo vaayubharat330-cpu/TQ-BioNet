@@ -135,10 +135,9 @@ def verify_data_separation(X_dev, groups_dev, subsets_dev, X_val, groups_val, su
     print("Development subset IDs:", sorted(dev_subset_ids))
     print("Validation subset IDs:", sorted(val_subset_ids))
     print("Subset overlap count:", len(subset_overlap))
-    print("PASS" if len(subset_overlap) == 0 else "FAIL", "- subset separation")
-    series_overlap = set(groups_dev).intersection(set(groups_val))
-    print("SeriesUID overlap count:", len(series_overlap))
-    print("PASS" if len(series_overlap) == 0 else "FAIL", "- SeriesUID separation (not proof of patient-level separation)")
+    if subset_overlap:
+        raise RuntimeError("Subset overlap detected between development and validation")
+    print("PASS - subset separation")
 
     if len(X_dev) != len(groups_dev) or len(X_val) != len(groups_val):
         raise RuntimeError("Feature/group row counts do not align")
