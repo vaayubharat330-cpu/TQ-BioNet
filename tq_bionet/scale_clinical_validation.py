@@ -116,7 +116,7 @@ def download_and_extract_subset(subset_idx):
     
             try:
                 urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
-            os.replace(tmp_path, zip_path)
+                os.replace(tmp_path, zip_path)
                 print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
             except Exception as e:
                 print(f"   Download failed: {e}")
