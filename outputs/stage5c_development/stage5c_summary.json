@@ -1,0 +1,77 @@
+{
+  "stage": "5C",
+  "scope": "development-only",
+  "git_commit": "665779748635744e160727909b0cbd198a13abe5",
+  "samples": 1446,
+  "features": 15,
+  "seriesuid_groups": 365,
+  "class_counts": {
+    "0": 723,
+    "1": 723
+  },
+  "folds": [
+    {
+      "fold": 1,
+      "train_samples": 1156,
+      "test_samples": 290,
+      "train_series": 292,
+      "test_series": 73,
+      "accuracy": 0.8310344827586207,
+      "auc": 0.9176694411414982
+    },
+    {
+      "fold": 2,
+      "train_samples": 1156,
+      "test_samples": 290,
+      "train_series": 292,
+      "test_series": 73,
+      "accuracy": 0.8551724137931035,
+      "auc": 0.919667063020214
+    },
+    {
+      "fold": 3,
+      "train_samples": 1156,
+      "test_samples": 290,
+      "train_series": 292,
+      "test_series": 73,
+      "accuracy": 0.8275862068965517,
+      "auc": 0.9001189060642093
+    },
+    {
+      "fold": 4,
+      "train_samples": 1158,
+      "test_samples": 288,
+      "train_series": 292,
+      "test_series": 73,
+      "accuracy": 0.8611111111111112,
+      "auc": 0.9182098765432098
+    },
+    {
+      "fold": 5,
+      "train_samples": 1158,
+      "test_samples": 288,
+      "train_series": 292,
+      "test_series": 73,
+      "accuracy": 0.8159722222222222,
+      "auc": 0.904224537037037
+    }
+  ],
+  "out_of_fold_metrics": {
+    "accuracy": 0.8381742738589212,
+    "balanced_accuracy": 0.8381742738589212,
+    "sensitivity": 0.7745504840940526,
+    "specificity": 0.9017980636237898,
+    "precision": 0.8874801901743264,
+    "f1": 0.827178729689808,
+    "auc": 0.9113747276313349,
+    "confusion_matrix": {
+      "tn": 652,
+      "fp": 71,
+      "fn": 163,
+      "tp": 560
+    }
+  },
+  "bundle_reload_prediction_equivalence": true,
+  "scikit_learn": "1.8.0",
+  "xgboost": "3.3.0"
+}
