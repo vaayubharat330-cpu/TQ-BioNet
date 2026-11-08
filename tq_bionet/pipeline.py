@@ -15,6 +15,11 @@ def preprocess_patch(patch):
     Calculates local z-score/IQR standardization on the raw patch, preserving 
     scale cues.
     """
+    patch = np.asarray(patch, dtype=np.float64)
+    if patch.ndim != 3 or any(d < 2 for d in patch.shape):
+        raise ValueError("patch must be a 3D array with every dimension >= 2")
+    if not np.all(np.isfinite(patch)):
+        raise ValueError("patch must contain only finite values")
     median_val = np.median(patch)
     iqr_val = np.percentile(patch, 75) - np.percentile(patch, 25)
     if iqr_val < 1e-6:
@@ -32,6 +37,13 @@ def compute_3d_structure_features(patch, sigma=1.0):
     Computes 3D Hessian eigenvalues to detect tubular vs. spherical structures.
     """
     # Smooth patch to compute stable derivatives
+    patch = np.asarray(patch, dtype=np.float64)
+    if patch.ndim != 3 or any(d < 2 for d in patch.shape):
+        raise ValueError("patch must be a 3D array with every dimension >= 2")
+    if not np.all(np.isfinite(patch)):
+        raise ValueError("patch must contain only finite values")
+    if not np.isfinite(sigma) or sigma <= 0:
+        raise ValueError("sigma must be finite and > 0")
     smoothed = gaussian_filter(patch, sigma=sigma)
     
     # Compute 1st derivatives
@@ -74,6 +86,15 @@ def extract_tq_bio_features(normalized_patch, mass_coef='adaptive', potential_sc
     augmented with 3D Hessian structure tensor eigenvalues to detect vessels (TQ-BioNet v3.0).
     """
     start_time = time.time()
+    normalized_patch = np.asarray(normalized_patch, dtype=np.float64)
+    if normalized_patch.ndim != 3 or len(set(normalized_patch.shape)) != 1:
+        raise ValueError("normalized_patch must be a cubic 3D array")
+    if any(d < 2 for d in normalized_patch.shape) or not np.all(np.isfinite(normalized_patch)):
+        raise ValueError("normalized_patch must have dimensions >= 2 and contain finite values")
+    if not np.isfinite(threshold):
+        raise ValueError("threshold must be finite")
+    if downsample_size is not None and (not isinstance(downsample_size, int) or downsample_size < 2):
+        raise ValueError("downsample_size must be None or an integer >= 2")
     
     # Compute self-adaptive biophysical parameters if requested
     if potential_scale == 'adaptive':
@@ -137,7 +158,9 @@ def extract_tq_bio_features(normalized_patch, mass_coef='adaptive', potential_sc
     
     # Sort keys for consistent vector ordering
     sorted_keys = sorted([k for k in features_dict.keys() if k != 'extraction_time_sec'])
-    features_vector = np.array([features_dict[k] for k in sorted_keys])
+    features_vector = np.asarray([features_dict[k] for k in sorted_keys], dtype=np.float64)
+    if not np.all(np.isfinite(features_vector)):
+        raise FloatingPointError("Feature extraction produced NaN or infinite values")
     
     return features_dict, features_vector
 
