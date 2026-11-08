@@ -169,11 +169,13 @@ def verify_scaler_leakage(scaler, X_dev_selected, X_val_selected):
 # ------------------------------------------------------------
 # 4. Model training (frozen)
 # ------------------------------------------------------------
-def train_models(conf, X_dev_selected, y_dev):
+def train_models(conf, X_dev_selected, y_dev, scaler=None):
+    if scaler is None:
+        scaler = train_scaler(X_dev_selected)
     svm = conf["svm"]
     xgb = conf["xgb"]
     rf = conf["rf"]
-    svm.fit(StandardScaler().fit_transform(X_dev_selected), y_dev)
+    svm.fit(scaler.transform(X_dev_selected), y_dev)
     xgb.fit(X_dev_selected, y_dev)
     rf.fit(X_dev_selected, y_dev)
     return svm, xgb, rf
@@ -448,7 +450,7 @@ if __name__ == "__main__":
     X_val_sel = X_val[:, sel_idx]
     scaler = train_scaler(X_dev_sel)
     verify_scaler_leakage(scaler, X_dev_sel, X_val_sel)
-    svm, xgb, rf = train_models(conf, X_dev_sel, y_dev)
+    svm, xgb, rf = train_models(conf, X_dev_sel, y_dev, scaler=scaler)
     metrics, pred_df = evaluate_models(svm, xgb, rf, scaler, X_val_sel, y_val, groups_val, coords_val)
     errors = error_analysis(pred_df)
     feature_audit_pass = feature_audit(X_val, expected_dim=31, feature_order=conf["feature_ordering"])
