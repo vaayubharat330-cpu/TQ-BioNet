@@ -32,6 +32,7 @@ def run_all_remaining_subsets():
     print("This will process and evaluate subsets 0 to 5.")
     print(f"Progress will be logged to: {log_path}\n")
     
+    failed_subsets = []
     for idx in subsets_to_run:
         msg = f"\n--- Processing Subset {idx}/5 ---\n"
         print(msg)
@@ -55,7 +56,8 @@ def run_all_remaining_subsets():
             print(error_msg)
             with open(log_path, 'a') as log_file:
                 log_file.write(error_msg)
-            continue
+            failed_subsets.append(idx)
+            break
             
         # Process and extract features
         print(f"   Extracting and saving features for subset{idx}...")
