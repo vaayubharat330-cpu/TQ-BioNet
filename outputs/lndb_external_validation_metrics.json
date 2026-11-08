@@ -1,0 +1,22 @@
+{
+    "dataset": "LNDb External Validation",
+    "n_samples": 248,
+    "n_positives": 54,
+    "n_negatives": 194,
+    "auc_roc": 0.5938335242458954,
+    "accuracy": 0.7298387096774194,
+    "specificity": 0.8195876288659794,
+    "precision": 0.38596491228070173,
+    "sensitivity": 0.4074074074074074,
+    "f1_score": 0.3963963963963964,
+    "confusion_matrix": [
+        [
+            159,
+            35
+        ],
+        [
+            32,
+            22
+        ]
+    ]
+}

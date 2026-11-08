@@ -1,0 +1,136 @@
+import os
+import numpy as np
+import SimpleITK as sitk
+import pydicom
+
+def load_mhd_image(mhd_path):
+    """
+    Loads an MHD/RAW image (standard in LUNA16) and returns the ITK image object,
+    the raw 3D numpy array, the origin, and the spacing.
+    """
+    if not os.path.exists(mhd_path):
+        raise FileNotFoundError(f"MHD file not found: {mhd_path}")
+    
+    itk_img = sitk.ReadImage(mhd_path)
+    img_array = sitk.GetArrayFromImage(itk_img)  # Order: (Z, Y, X)
+    origin = np.array(itk_img.GetOrigin())        # Order: (X, Y, Z)
+    spacing = np.array(itk_img.GetSpacing())      # Order: (X, Y, Z)
+    
+    return itk_img, img_array, origin, spacing
+
+def load_dicom_series(dicom_dir):
+    """
+    Loads a DICOM series from a directory (standard in LIDC-IDRI) and returns
+    the ITK image object, the raw 3D numpy array, the origin, and the spacing.
+    """
+    if not os.path.exists(dicom_dir):
+        raise FileNotFoundError(f"DICOM directory not found: {dicom_dir}")
+        
+    reader = sitk.ImageSeriesReader()
+    dicom_names = reader.GetGDCMSeriesFileNames(dicom_dir)
+    reader.SetFileNames(dicom_names)
+    itk_img = reader.Execute()
+    
+    img_array = sitk.GetArrayFromImage(itk_img)  # Order: (Z, Y, X)
+    origin = np.array(itk_img.GetOrigin())        # Order: (X, Y, Z)
+    spacing = np.array(itk_img.GetSpacing())      # Order: (X, Y, Z)
+    
+    return itk_img, img_array, origin, spacing
+
+def world_to_voxel(world_coords, origin, spacing):
+    """
+    Converts 3D world coordinates (X, Y, Z in mm) to voxel indices (Z, Y, X).
+    """
+    # world_coords order: (X, Y, Z)
+    # origin order: (X, Y, Z)
+    # spacing order: (X, Y, Z)
+    voxel_coords = np.round((world_coords - origin) / spacing).astype(int)
+    # Return in (Z, Y, X) order for indexing numpy array
+    return voxel_coords[2], voxel_coords[1], voxel_coords[0]
+
+def extract_3d_patch(img_array, voxel_center, patch_size=32, fill_value=-1000):
+    """
+    Extracts a 3D patch of size (patch_size, patch_size, patch_size) centered at voxel_center.
+    Handles out-of-boundary cases by padding with fill_value.
+    voxel_center order: (Z, Y, X)
+    """
+    z_c, y_c, x_c = voxel_center
+    r = patch_size // 2
+    
+    # Define bounds in the original array
+    z_min, z_max = z_c - r, z_c + r
+    y_min, y_max = y_c - r, y_c + r
+    x_min, x_max = x_c - r, x_c + r
+    
+    # Shapes
+    sz, sy, sx = img_array.shape
+    
+    # Initialize patch with fill_value
+    patch = np.full((patch_size, patch_size, patch_size), fill_value, dtype=img_array.dtype)
+    
+    # Compute intersection bounds
+    z_start_src = max(0, z_min)
+    z_end_src = min(sz, z_max)
+    y_start_src = max(0, y_min)
+    y_end_src = min(sy, y_max)
+    x_start_src = max(0, x_min)
+    x_end_src = min(sx, x_max)
+    
+    # Destination bounds in patch
+    z_start_dst = z_start_src - z_min
+    z_end_dst = z_end_src - z_min
+    y_start_dst = y_start_src - y_min
+    y_end_dst = y_end_src - y_min
+    x_start_dst = x_start_src - x_min
+    x_end_dst = x_end_src - x_min
+    
+    # Copy sub-volume if valid
+    if (z_start_src < z_end_src) and (y_start_src < y_end_src) and (x_start_src < x_end_src):
+        patch[z_start_dst:z_end_dst, y_start_dst:y_end_dst, x_start_dst:x_end_dst] = \
+            img_array[z_start_src:z_end_src, y_start_src:y_end_src, x_start_src:x_end_src]
+            
+    return patch
+
+def normalize_patch(patch, hu_min=-1000.0, hu_max=400.0):
+    """
+    Clips and normalizes HU values of a patch to [0, 1] scale.
+    """
+    clipped = np.clip(patch, hu_min, hu_max)
+    normalized = (clipped - hu_min) / (hu_max - hu_min)
+    return normalized
+
+def patient_level_train_test_split(X_data, y_data, patient_ids, test_size=0.30, random_state=42):
+    """
+    Splits the dataset strictly at the patient level.
+    Guarantees that all patches from the same patient go into the same split
+    to prevent data leakage (overfitting evaluation).
+    """
+    unique_patients = np.unique(patient_ids)
+    
+    # Shuffle and split patient IDs
+    rng = np.random.default_rng(seed=random_state)
+    shuffled_patients = rng.permutation(unique_patients)
+    
+    split_idx = int(len(shuffled_patients) * (1.0 - test_size))
+    train_patients = shuffled_patients[:split_idx]
+    test_patients = shuffled_patients[split_idx:]
+    
+    # Filter indices based on patient split
+    train_indices = [i for i, pid in enumerate(patient_ids) if pid in train_patients]
+    test_indices = [i for i, pid in enumerate(patient_ids) if pid in test_patients]
+    
+    # Extract splits
+    X_train = [X_data[i] for i in train_indices]
+    X_test = [X_data[i] for i in test_indices]
+    y_train = [y_data[i] for i in train_indices]
+    y_test = [y_data[i] for i in test_indices]
+    
+    # Convert back to numpy array if inputs were arrays
+    if isinstance(X_data, np.ndarray):
+        X_train = np.array(X_train)
+        X_test = np.array(X_test)
+    if isinstance(y_data, np.ndarray):
+        y_train = np.array(y_train)
+        y_test = np.array(y_test)
+        
+    return X_train, X_test, y_train, y_test, train_indices, test_indices

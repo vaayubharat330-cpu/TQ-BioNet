@@ -1,0 +1,5 @@
+metric,value
+true_negative,420
+false_positive,43
+false_negative,84
+true_positive,379

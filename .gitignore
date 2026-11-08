@@ -1,0 +1,53 @@
+# ==========================================
+# Git Ignore for TQ-BioNet Medical AI Project
+# ==========================================
+
+# 1. Heavy Raw Medical CT Volumetric Data (Never upload gigabytes of CT scans to GitHub)
+luna16_data/subset*
+luna16_data/*.mhd
+luna16_data/*.raw
+luna16_data/*.zip
+luna16_data/*.7z
+lndb_data/extracted/
+lndb_data/*.mhd
+lndb_data/*.raw
+lndb_data/*.tar*
+*.mhd
+*.raw
+
+# 2. Heavy Feature Cache Arrays (Numpy binary files)
+luna16_data/cache/
+*.npy
+*.npz
+
+# 3. Python Bytecode, Caches & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# 4. OS & IDE Specific Metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 5. Microsoft Word Lock Files (Temporary lock files created when Word is open)
+~$*.docx
+~$*.pptx
+~$*.xlsx
+
+# 6. Large archive dumps
+archive/
+*.bak
+*.tmp

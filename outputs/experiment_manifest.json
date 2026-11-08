@@ -1,0 +1,28 @@
+{
+    "experiment_id": "tq_bionet_v3.0_dev_cohort_repro",
+    "date": "2026-07-14 18:06:23",
+    "git_commit": "unavailable",
+    "algorithm_version": "v3.0",
+    "feature_version": "v3.0",
+    "random_seed": 42,
+    "subset_list": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+    ],
+    "patient_ids_hash": "171bb9e2a88966ab6a2120a15e303259ba09b5bc145a6f1cdc3b7cc3b3285500",
+    "sample_count": 1446,
+    "feature_dimension": 31,
+    "cache_hashes": {
+        "subset0": "1857f6c9b29539769b7732658fbb33d3e16f459693cba644a9239d87501fe042",
+        "subset1": "2f0251f60c141e8d13be8cb73cd70bee30ce9023d4ef6103cd760fbd81378906",
+        "subset2": "c8b63e81ff9fbbb4a2c1bc11b06faa82eb33d0754541bbb88bb72076d4e3fea4",
+        "subset3": "08a0e442125f94aa7ad3a201ab5746c2d6dd0f3d8b11b9c04c9bd21dd10d19d1",
+        "subset4": "48af3566e97a1cd56986391bd8198cb044f3e3097d531dc19c0232421d71c26b",
+        "subset5": "7b437ec0b41b7c1ada27109ea2bc7f48162bb1ff0fc0cb9c008b22e4ad1dbb5d"
+    },
+    "runtime_evaluation_sec": 6.591032600030303
+}
