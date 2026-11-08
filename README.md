@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
 [![Benchmarks: LUNA16](https://img.shields.io/badge/Benchmark-LUNA16%20%7C%20LNDb-orange.svg)]()
-[![Explainability: 100% Closed--Form](https://img.shields.io/badge/Explainability-Closed--Form%20Physics-success.svg)]()
+[![Research prototype](https://img.shields.io/badge/status-research%20prototype-orange.svg)]()
 
 > **TQ-BioNet: Lung Nodule Classification on Thoracic CT Integrating Topological Homology, Density Well Physics, and 3D Hessian Geometry**  
 > *Developed by: Department of Information Technology, MLR Institute of Technology, Hyderabad, Telangana, India.*
@@ -12,13 +12,13 @@
 
 ## 📌 Project Overview
 
-**TQ-BioNet** is a deterministic, zero-trainable-parameter biophysical feature engineering framework for candidate-level pulmonary nodule classification on 3D Thoracic Computed Tomography (CT).
+**TQ-BioNet** is a research prototype for candidate-level pulmonary nodule classification on 3D thoracic CT. It combines hand-engineered numerical descriptors with a supervised classifier. Feature extraction has no learned weights; the classifier is trained from data.
 
 Existing computer-aided detection (CAD) systems face two fundamental challenges:
 1. **Black-box opacity and parameter bloat:** Deep 3D convolutional networks (3D ResNet, 3D Swin Transformers) employ tens of millions of learnable parameters ($11\text{M} - 86\text{M}$ weights), which overfit scanner-specific contrast noise and lack clinical explainability.
 2. **Juxta-vascular false positives:** Spherical nodules physically attached to pulmonary vessels share identical Hounsfield Unit (HU) radiodensity ranges with blood vessels, creating excessive false alarms at vascular bifurcations.
 
-**TQ-BioNet** solves this by extracting a **15-dimensional frozen feature space** using closed-form mathematical equations from **Topological Data Analysis (TDA)**, **discretized 3D Schrödinger potential-well mechanics**, and **3D Hessian differential geometry**, classifying candidate patches via a calibrated **Soft-Voting Ensemble** (SVM, XGBoost, Random Forest).
+The current implementation extracts 31 descriptors, with a 15-feature subset used by selected validation scripts. It uses a numerical finite-difference eigenproblem, point-cloud persistent homology, thresholded fractal summaries, and single-location Hessian descriptors. The ensemble averages model probabilities; it is not calibrated unless a separate calibration procedure is explicitly fitted and evaluated.
 
 ---
 
@@ -29,14 +29,14 @@ Existing computer-aided detection (CAD) systems face two fundamental challenges:
 * **Juxta-Vascular Separation:** Multi-scale Frangi vesselness filter ($\mathcal{V}_\sigma$) and 3D Blobness ratios ($R_B$) mathematically separate tubular vessels from spherical nodules.
 * **3D Schrödinger Density Well:** Discretized 3D Hamiltonian eigenvalue equation solved via SciPy ARPACK Lanczos solver, extracting core density concentration states ($E_0, E_1, E_2$).
 * **Sublevel Persistent Homology:** Captures microstructural tissue connectivity ($H_0$ persistent entropy, $\beta_1$ 1D loops).
-* **Ultra-Fast Clinical Inference:** Complete feature extraction latency is **24.52 ms**, and classifier inference latency is **0.0734 ms** per candidate patch on standard CPU hardware.
+* **Runtime:** Benchmark numbers must be regenerated on documented hardware and software versions before being treated as reproducible performance claims.
 
 ---
 
-## 📊 Audited Empirical Results
+## ⚠️ Historical Results — Not Yet Revalidated
 
 ### 1. Primary Benchmark: LUNA16 Independent Validation Cohort (Subsets 6–9, $N = 926$)
-Evaluated on a strictly audited, patient-disjoint split (Subsets 0–5 development, Subsets 6–9 independent validation) with zero patient overlap:
+Previously reported repository metrics are retained here as historical records only. The current audit found inconsistencies in validation scripts and split metadata. Subset separation / SeriesUID separation must not be described as patient-disjoint unless a verified patient mapping is supplied. Do not cite these values as independently reproduced v3.1 results:
 
 | Metric | Score | 95% Confidence Interval (Bootstrap $B=1000$) |
 | :--- | :---: | :---: |
@@ -53,7 +53,7 @@ Evaluated on a strictly audited, patient-disjoint split (Subsets 0–5 developme
 * **Subset 8 ($N=236$):** Accuracy = 84.32%, Specificity = 88.98%, AUC-ROC = 0.9199
 * **Subset 9 ($N=210$):** Accuracy = 86.19%, Specificity = 92.38%, AUC-ROC = 0.9123
 
-### 2. External Reality Check: LNDb European Dataset ($N = 248$, Zero-Shot Transfer)
+### 2. LNDb external validation — currently blocked
 Evaluated on external CT volumes from the University Hospital of São João with thicker slices ($1.25 - 2.5\,\text{mm}$) and different reconstruction kernels with **zero fine-tuning**:
 * **Accuracy:** **72.98%**
 * **Specificity:** **81.96%** (Successfully rejected 159 out of 194 non-nodule false alarms; $\text{TN} = 159, \text{FP} = 35$)
@@ -88,7 +88,7 @@ Evaluated on external CT volumes from the University Hospital of São João with
  [Soft-Voting Ensemble (SVM + XGBoost + RF)]
                │
                ▼
- [Calibrated Nodule Candidate Probability & Prediction]
+ [Mean Ensemble Probability & Prediction]
 ```
 
 ---
@@ -123,10 +123,12 @@ Evaluated on external CT volumes from the University Hospital of São João with
 
 ## 🚀 Quickstart & Reproduction
 
+For the v3.1 audit/repair work, see `AUDIT_REPAIR_V3.1.md`. Do not reuse v3.0 caches after any feature-schema or preprocessing change; the v3.1 pipeline must regenerate caches and manifests. Full LUNA16/LNDb validation requires the corresponding datasets and is not claimed to have run in this repository audit.
+
 ### 1. Installation
 Clone this repository and install dependencies in a clean virtual environment:
 ```bash
-git clone https://github.com/surajveludandi/TQ-BioNet.git
+git clone https://github.com/vaayubharat330-cpu/TQ-BioNet.git
 cd TQ-BioNet
 pip install -r requirements.txt
 ```
