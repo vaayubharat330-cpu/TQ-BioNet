@@ -368,15 +368,15 @@ def reproducibility_study(conf, X_dev_sel, y_dev, X_val_sel, y_val, seeds=[42, 1
 # ------------------------------------------------------------
 def create_manifest(runtime_seconds, seed_used):
     manifest = {
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": seed_used,
         "subset_list": [6],
         "training_subsets": [0, 1, 2, 3, 4, 5],
         "validation_subset": [6],
         "sha256": {
-            "subset6_X": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3" / "subset6" / "X.npy")),
-            "subset6_y": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3" / "subset6" / "y.npy")),
+            "subset6_X": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3_1" / "subset6" / "X.npy")),
+            "subset6_y": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3_1" / "subset6" / "y.npy")),
         },
         "runtime_seconds": runtime_seconds,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
