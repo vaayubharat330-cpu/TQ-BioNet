@@ -1,9 +1,9 @@
 {
     "phase": "Independent Validation",
-    "date": "2026-09-21 03:53:46",
-    "git_commit": "unavailable",
-    "algorithm_version": "v3.0",
-    "feature_version": "v3.0",
+    "date": "2026-11-08 19:05:35",
+    "git_commit": "1a84030c36bfdf9c18a95137b803fc7bcb439350",
+    "algorithm_version": "v3.1",
+    "feature_version": "v3.1",
     "random_seed": 42,
     "subset_list": [
         6,
@@ -14,10 +14,10 @@
     "sample_count": 926,
     "feature_dimension": 15,
     "cache_hashes": {
-        "subset6": "c26ef7effade8cd8692ed0b6d05ab9b6982430f62024c5c7d9fb8655c29a11cd",
-        "subset7": "39c7503d5a4a07a5615e0e015f32c403395be1528c17e8563875cda7720747b9",
-        "subset8": "08cb224b9c9ffbfa33cddbd65e1626f263451834eb8db65553fd5c7fd87e43d5",
-        "subset9": "29c7256509f3ee1d9aa7124bfe146444377396adcac3bdea063bbb9f0b4afba7"
+        "subset6": "35192eb2ac4ad195ae313b3b265ca93ca57d6e8c25b6edb472f9435e8c2890d9",
+        "subset7": "ccd0412d17b04168e22b396af5dabf8b91f925e698874f376807ba655d4b96da",
+        "subset8": "a749e3772b8f8b15e7775ea579dac7fe9b5df245a1fff0994378eb47580854a0",
+        "subset9": "f7458968043d19439f5f77548bccd55078c23271de5391367e37064a0dab0deb"
     },
-    "runtime_evaluation_sec": 26.36370549997082
+    "runtime_evaluation_sec": 875.5461247999992
 }
