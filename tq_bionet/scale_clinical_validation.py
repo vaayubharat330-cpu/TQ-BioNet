@@ -401,17 +401,38 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
         if meta["subset_ids"] != [subset_idx]:
             raise ValueError(f"Subset ID mismatch inside metadata: expected {[subset_idx]}, got {meta['subset_ids']}")
             
-        # Verify SHA256 Checksum
-        X_path = os.path.join(cache_dir, "X.npy")
-        current_hash = get_file_sha256(X_path)
-        if current_hash != meta["SHA256 checksum"]:
-            raise ValueError(f"SHA256 checksum mismatch for subset{subset_idx} cache file! File is corrupt or modified.")
-            
-        X_parts.append(np.load(X_path))
-        y_parts.append(np.load(os.path.join(cache_dir, "y.npy")))
-        groups_parts.append(np.load(os.path.join(cache_dir, "groups.npy")))
-        coords_parts.append(np.load(os.path.join(cache_dir, "coords.npy")))
-        subsets_parts.append(np.full(len(y_parts[-1]), subset_idx))
+        # Verify all required arrays exist and can be loaded without pickle.
+        array_paths = {
+            "X": os.path.join(cache_dir, "X.npy"),
+            "y": os.path.join(cache_dir, "y.npy"),
+            "groups": os.path.join(cache_dir, "groups.npy"),
+            "coords": os.path.join(cache_dir, "coords.npy"),
+        }
+        missing = [name for name, path in array_paths.items() if not os.path.isfile(path)]
+        if missing:
+            raise ValueError(f"Missing cache arrays for subset{subset_idx}: {missing}")
+        if get_file_sha256(array_paths["X"]) != meta["SHA256 checksum"]:
+            raise ValueError(f"X cache SHA256 mismatch for subset{subset_idx}")
+
+        X = np.load(array_paths["X"], allow_pickle=False)
+        y = np.load(array_paths["y"], allow_pickle=False)
+        groups = np.load(array_paths["groups"], allow_pickle=False)
+        coords = np.load(array_paths["coords"], allow_pickle=False)
+        n = len(y)
+        if X.ndim != 2 or X.shape != (n, 31):
+            raise ValueError(f"Invalid X shape for subset{subset_idx}: {X.shape}; expected ({n}, 31)")
+        if y.ndim != 1 or groups.ndim != 1 or coords.ndim != 2 or coords.shape != (n, 3):
+            raise ValueError(f"Cache row/shape mismatch for subset{subset_idx}")
+        if len(groups) != n or not np.isfinite(X).all() or not np.isin(y, [0, 1]).all():
+            raise ValueError(f"Invalid feature values or labels in subset{subset_idx}")
+        if not np.isfinite(coords).all():
+            raise ValueError(f"Non-finite candidate coordinates in subset{subset_idx}")
+
+        X_parts.append(X)
+        y_parts.append(y)
+        groups_parts.append(groups)
+        coords_parts.append(coords)
+        subsets_parts.append(np.full(n, subset_idx, dtype=np.int16))
         
     X_combined = np.concatenate(X_parts, axis=0)
     y_combined = np.concatenate(y_parts, axis=0)
