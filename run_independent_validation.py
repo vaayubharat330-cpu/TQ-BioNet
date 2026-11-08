@@ -39,13 +39,17 @@ def run_independent_validation():
     validation_subsets = [6, 7, 8, 9]
     print(f"Verifying caches for independent validation subsets: {validation_subsets}...")
     for idx in validation_subsets:
-        # Cache path check
-        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{idx}")
-        metadata_path = os.path.join(cache_dir, "metadata.json")
-        if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
-            print(f"   Subset {idx} cache verified.")
+        # Validate every cache array, schema, version and checksum before reuse.
+        cache_valid = False
+        try:
+            reconstruct_combined_dataset([idx], data_dir_c)
+            cache_valid = True
+        except (OSError, ValueError, KeyError, FileNotFoundError) as cache_error:
+            print(f"   Subset {idx} cache invalid or missing: {cache_error}")
+        if cache_valid:
+            print(f"   Subset {idx} v3.1 cache verified.")
         else:
-            print(f"   Subset {idx} cache not found. Re-building cache...")
+            print(f"   Re-building subset {idx} v3.1 cache...")
             # Download and extract raw scan files
             dl_success = False
             for attempt in range(1, 11):
