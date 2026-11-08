@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import roc_auc_score, accuracy_score, recall_score, precision_score, f1_score, confusion_matrix
+from sklearn.metrics import roc_auc_score, accuracy_score, recall_score, precision_score, f1_score, confusion_matrix, roc_curve, precision_recall_curve, average_precision_score
 
 import warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='ripser')
@@ -22,11 +22,21 @@ def run_lndb_validation():
     print("        TQ-BioNet v3.0 External Validation on LNDb CT Dataset         ")
     print("======================================================================\n")
 
-    base_dir = Path(r"c:\Users\suraj\Desktop\4th yr project")
+    base_dir = Path(__file__).resolve().parent
     lndb_dir = base_dir / "lndb_data"
     extracted_dir = lndb_dir / "extracted"
     output_dir = base_dir / "outputs"
-    artifact_dir = Path(r"C:\Users\suraj\.gemini\antigravity\brain\2276150a-3f7e-4079-b867-712c3f036612")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # NOTE: This legacy script is not a valid v3.0 zero-shot external validation:
+    # it currently has no frozen 15-feature model artifact or matching LNDb
+    # preprocessing/feature-schema pipeline. Stop rather than report misleading metrics.
+    raise RuntimeError(
+        "LNDb validation is disabled pending a reproducible frozen-model export, "
+        "shared preprocessing/resampling, identical selected feature schema, and "
+        "verified LNDb label semantics. The previous script trained a different "
+        "model and extracted mismatched native-spacing features."
+    )
 
     # 1. Load actual LUNA16 Development Cohort cached features (Subsets 0–5)
     cache_base = base_dir / "luna16_data" / "cache" / "tq_bionet_v3"
@@ -184,9 +194,8 @@ def run_lndb_validation():
     plt.style.use('default')
     fig, ax = plt.subplots(figsize=(6.5, 5.5), dpi=300)
     ax.grid(True, linestyle='--', alpha=0.5)
-    fpr = np.linspace(0, 1, 100)
-    tpr = np.clip(1 - (1 - fpr)**2.8, 0, 1)
-    ax.plot(fpr, tpr, color='#0072CE', lw=2.5, label=f'TQ-BioNet v3.0 (LNDb External AUC = {auc:.4f})')
+    fpr, tpr, _ = roc_curve(y_lndb, y_probs)
+    ax.plot(fpr, tpr, color='#0072CE', lw=2.5, label=f'TQ-BioNet (LNDb AUC = {auc:.4f})')
     ax.plot([0, 1], [0, 1], color='#888888', lw=1.5, linestyle='--', label='Chance Baseline (AUC = 0.50)')
     ax.set_title('External Validation ROC Curve on LNDb Dataset\n(N = {} Candidate Patches, 43 CT Scans)'.format(len(y_lndb)), fontsize=11, fontweight='bold', color='#0F2043')
     ax.set_xlabel('False Positive Rate (1 - Specificity)', fontsize=10, fontweight='bold')
@@ -215,11 +224,7 @@ def run_lndb_validation():
     plt.savefig(lndb_cm_path, dpi=300)
     plt.close()
 
-    for src in [metrics_file, lndb_roc_path, lndb_cm_path]:
-        dest = artifact_dir / src.name
-        with open(src, 'rb') as f_in, open(dest, 'wb') as f_out:
-            f_out.write(f_in.read())
-        print(f"Copied {src.name} to artifact directory.")
+    # Artifacts are saved only inside the repository outputs directory.
 
 if __name__ == "__main__":
     run_lndb_validation()
