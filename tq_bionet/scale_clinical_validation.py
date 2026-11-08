@@ -170,7 +170,7 @@ def process_and_save_subset(subset_idx):
         data_dir_d = str(project_root / "luna16_data" / "large_data")
     
     # Skip reprocessing if valid cache exists (Issue 2/3 optimization)
-    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
+    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
     metadata_path = os.path.join(cache_dir, "metadata.json")
     if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
         print(f"   [STEP 3] Valid cache for subset{subset_idx} already exists. Skipping extraction.")
@@ -329,7 +329,7 @@ def process_and_save_subset(subset_idx):
     print(f"   Extraction completed in {time.time() - start_time:.1f} seconds. Extracted shape: {X_new.shape}")
     
     # Save inside versioned folder cache
-    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
+    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
     os.makedirs(cache_dir, exist_ok=True)
     
     X_path = os.path.join(cache_dir, "X.npy")
@@ -346,8 +346,8 @@ def process_and_save_subset(subset_idx):
     sha_hash = get_file_sha256(X_path)
     
     metadata = {
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "preprocessing_version": "local_zscore_iqr_v2.0",
         "feature_dimension": int(X_new.shape[1]),
         "subset_ids": [int(subset_idx)],
@@ -384,7 +384,7 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
     subsets_parts = []
     
     for subset_idx in subsets_list:
-        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
+        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
         metadata_path = os.path.join(cache_dir, "metadata.json")
         
         if not os.path.exists(metadata_path):
@@ -396,7 +396,7 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
         # Verify metadata
         if meta["feature_dimension"] != 31:
             raise ValueError(f"Feature dimension mismatch for subset{subset_idx}: expected 31, got {meta['feature_dimension']}")
-        if meta["algorithm_version"] != "v3.0" or meta["feature_version"] != "v3.0":
+        if meta["algorithm_version"] != "v3.1" or meta["feature_version"] != "v3.1":
             raise ValueError(f"Version mismatch for subset{subset_idx}: expected v3.0, got algorithm {meta['algorithm_version']}, feature {meta['feature_version']}")
         if meta["subset_ids"] != [subset_idx]:
             raise ValueError(f"Subset ID mismatch inside metadata: expected {[subset_idx]}, got {meta['subset_ids']}")
@@ -642,18 +642,18 @@ def run_retraining():
 
     # GENERATE EXPERIMENT MANIFEST
     manifest = {
-        "experiment_id": "tq_bionet_v3.0_dev_cohort_repro",
+        "experiment_id": "tq_bionet_v3_1.0_dev_cohort_repro",
         "date": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "git_commit": get_git_commit(),
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": 42,
         "subset_list": [0, 1, 2, 3, 4, 5],
         "patient_ids_hash": hashlib.sha256(groups.tobytes()).hexdigest(),
         "sample_count": int(X.shape[0]),
         "feature_dimension": int(X.shape[1]),
         "cache_hashes": {
-            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{i}", "X.npy"))
+            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{i}", "X.npy"))
             for i in [0, 1, 2, 3, 4, 5]
         },
         "runtime_evaluation_sec": float(eval_duration)
