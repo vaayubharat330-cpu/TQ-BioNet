@@ -128,11 +128,16 @@ def verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val):
     print("Patient overlap count:", len(patient_overlap))
     print("PASS" if len(patient_overlap) == 0 else "FAIL", "- patient overlap")
 
-    dev_series = set(subsets_dev)
-    val_series = set(subsets_val)
-    series_overlap = dev_series.intersection(val_series)
+    dev_subset_ids = set(np.unique(subsets_dev).tolist())
+    val_subset_ids = set(np.unique(subsets_val).tolist())
+    subset_overlap = dev_subset_ids.intersection(val_subset_ids)
+    print("Development subset IDs:", sorted(dev_subset_ids))
+    print("Validation subset IDs:", sorted(val_subset_ids))
+    print("Subset overlap count:", len(subset_overlap))
+    print("PASS" if len(subset_overlap) == 0 else "FAIL", "- subset separation")
+    series_overlap = set(groups_dev).intersection(set(groups_val))
     print("SeriesUID overlap count:", len(series_overlap))
-    print("PASS" if len(series_overlap) == 0 else "FAIL", "- seriesuid overlap")
+    print("PASS" if len(series_overlap) == 0 else "FAIL", "- SeriesUID separation (not proof of patient-level separation)")
 
     dev_dupes = len(groups_dev) != len(set(groups_dev))
     val_dupes = len(groups_val) != len(set(groups_val))
@@ -155,12 +160,15 @@ def train_scaler(X_dev_selected):
     scaler.fit(X_dev_selected)
     return scaler
 
-def verify_scaler_leakage(scaler, X_val_selected):
-    try:
-        _ = scaler.transform(X_val_selected)
-        print("PASS - StandardScaler.transform used on validation only")
-    except Exception as e:
-        print("FAIL - Scaler transform error:", e)
+def verify_scaler_leakage(scaler, X_dev_selected, X_val_selected):
+    if not np.allclose(scaler.mean_, np.mean(X_dev_selected, axis=0)):
+        raise RuntimeError("Scaler mean does not match development features")
+    if not np.allclose(scaler.scale_, np.std(X_dev_selected, axis=0)):
+        raise RuntimeError("Scaler scale does not match development features")
+    transformed = scaler.transform(X_val_selected)
+    if transformed.shape != X_val_selected.shape or not np.all(np.isfinite(transformed)):
+        raise RuntimeError("Validation scaling produced invalid values")
+    print("PASS - scaler parameters are fitted from development data only")
 
 # ------------------------------------------------------------
 # 4. Model training (frozen)
@@ -169,7 +177,7 @@ def train_models(conf, X_dev_selected, y_dev):
     svm = conf["svm"]
     xgb = conf["xgb"]
     rf = conf["rf"]
-    svm.fit(X_dev_selected, y_dev)
+    svm.fit(StandardScaler().fit_transform(X_dev_selected), y_dev)
     xgb.fit(X_dev_selected, y_dev)
     rf.fit(X_dev_selected, y_dev)
     return svm, xgb, rf
@@ -249,7 +257,7 @@ def evaluate_models(svm, xgb, rf, scaler, X_val_selected, y_val, groups_val, coo
 
     df_pred = pd.DataFrame({
         "seriesuid": groups_val,
-        "patient_id": groups_val,
+        "seriesuid": groups_val,
         "x": coords_val[:, 0],
         "y": coords_val[:, 1],
         "z": coords_val[:, 2],
@@ -291,7 +299,7 @@ def feature_audit(X_val, expected_dim, feature_order):
     dim_ok = X_val.shape[1] == expected_dim
     nan_ok = not np.isnan(X_val).any()
     inf_ok = not np.isinf(X_val).any()
-    order_ok = True
+    order_ok = (len(feature_order) == expected_dim and feature_order == sorted(feature_order))
     print("Feature dimension check:", "PASS" if dim_ok else "FAIL")
     print("NaN check:", "PASS" if nan_ok else "FAIL")
     print("Inf check:", "PASS" if inf_ok else "FAIL")
@@ -322,7 +330,7 @@ def reproducibility_study(conf, X_dev_sel, y_dev, X_val_sel, y_val, seeds=[42, 1
         )
         scaler = StandardScaler()
         scaler.fit(X_dev_sel)
-        svm.fit(X_dev_sel, y_dev)
+        svm.fit(scaler.transform(X_dev_sel), y_dev)
         xgb.fit(X_dev_sel, y_dev)
         rf.fit(X_dev_sel, y_dev)
         svm_probs = svm.predict_proba(scaler.transform(X_val_sel))[:, 1]
@@ -443,7 +451,7 @@ if __name__ == "__main__":
     X_dev_sel = X_dev[:, sel_idx]
     X_val_sel = X_val[:, sel_idx]
     scaler = train_scaler(X_dev_sel)
-    verify_scaler_leakage(scaler, X_val_sel)
+    verify_scaler_leakage(scaler, X_dev_sel, X_val_sel)
     svm, xgb, rf = train_models(conf, X_dev_sel, y_dev)
     metrics, pred_df = evaluate_models(svm, xgb, rf, scaler, X_val_sel, y_val, groups_val, coords_val)
     errors = error_analysis(pred_df)
