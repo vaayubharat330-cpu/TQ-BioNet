@@ -17,11 +17,12 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 import json
 import hashlib
 import subprocess
+from pathlib import Path
 
 warnings.filterwarnings('ignore', category=UserWarning, module='ripser')
 
 from tq_bionet.pipeline import extract_tq_bio_features
-from tq_bionet.data_loader import extract_3d_patch, safe_extract_zip
+from tq_bionet.data_loader import extract_3d_patch, safe_extract_zip, file_lock
 from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, plot_roc_pr_curves
 
 def get_git_commit():
@@ -45,57 +46,73 @@ def download_and_extract_subset(subset_idx):
     
     zip_name = f"subset{subset_idx}.zip"
     zip_path = os.path.join(data_dir_d, zip_name)
+    lock_path = zip_path + ".lock"
     
     if subset_idx == 0:
         extract_path = os.path.join(data_dir_c, "subset0")
+        target_staging = Path(data_dir_c).resolve()
     else:
         extract_path = os.path.join(data_dir_d, f"subset{subset_idx}")
-    
-    # If the unzipped directory already exists, we skip everything
-    if os.path.exists(extract_path) and os.path.isdir(extract_path) and len(os.listdir(extract_path)) > 0:
-        print(f"\n[STEP 1] Unzipped folder '{extract_path}' already exists, skipping download and extraction.")
-        return True
+        target_staging = Path(data_dir_d).resolve()
 
-    lock_path = zip_path + ".lock"
-    tmp_path = f"{zip_path}.tmp.{os.getpid()}"
+    with file_lock(lock_path, timeout=120):
+        # If the unzipped directory already exists, we skip everything
+        if os.path.exists(extract_path) and os.path.isdir(extract_path) and len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) > 0:
+            print(f"\n[STEP 1] Unzipped folder '{extract_path}' already exists and contains scans, skipping download/extraction.")
+            return True
 
-    if os.path.exists(lock_path):
-        mtime = os.path.getmtime(lock_path)
-        if (time.time() - mtime) > 1800:
-            print(f"Removing stale lockfile: {lock_path}")
-            try:
-                os.remove(lock_path)
-            except OSError:
-                pass
-        else:
-            print(f"\n[STEP 1] Detected concurrent download of {zip_name} in progress (.lock found).")
-            print("         Waiting up to 120 seconds for lock release...")
-            waited = 0
-            while os.path.exists(lock_path) and waited < 120:
-                time.sleep(10)
-                waited += 10
-            if os.path.exists(lock_path):
-                raise TimeoutError(f"Download lock for {zip_name} timed out after 120s")
+        tmp_path = f"{zip_path}.tmp.{os.getpid()}"
 
-    # Verify archive integrity via CRC32 testzip before skipping download
-    if os.path.exists(zip_path):
-        is_valid_zip = False
-        try:
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                is_valid_zip = (zf.testzip() is None)
-        except Exception:
+        # Verify archive integrity via CRC32 testzip before skipping download
+        if os.path.exists(zip_path):
             is_valid_zip = False
-
-        if is_valid_zip:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' verified via CRC32 checksum, skipping download. Proceeding directly to extraction.")
-        else:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' is corrupt/incomplete. Deleting and redownloading...")
             try:
-                os.remove(zip_path)
-            except Exception as e:
-                print(f"   Failed to delete corrupt zip: {e}")
-            
-            # Download since it was corrupt
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    is_valid_zip = (zf.testzip() is None)
+            except Exception:
+                is_valid_zip = False
+
+            if is_valid_zip:
+                print(f"\n[STEP 1] Zip archive '{zip_path}' verified via CRC32 checksum, skipping download. Proceeding directly to extraction.")
+            else:
+                print(f"\n[STEP 1] Zip archive '{zip_path}' is corrupt/incomplete. Deleting and redownloading...")
+                try:
+                    os.remove(zip_path)
+                except Exception as e:
+                    print(f"   Failed to delete corrupt zip: {e}")
+                
+                # Download since it was corrupt
+                if subset_idx <= 6:
+                    url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
+                else:
+                    url = f"https://zenodo.org/api/records/4121926/files/subset{subset_idx}.zip/content"
+                    
+                print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
+                start_dl = time.time()
+                
+                global last_report
+                last_report = -1
+                
+                def dl_progress(block_num, block_size, total_size):
+                    global last_report
+                    downloaded = block_num * block_size
+                    percent = int(downloaded * 100 / total_size) if total_size > 0 else 0
+                    if percent % 10 == 0 and percent != last_report:
+                        print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
+                        last_report = percent
+        
+                try:
+                    urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
+                    os.replace(tmp_path, zip_path)
+                    print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
+                except Exception as e:
+                    print(f"   Download failed: {e}")
+                    if os.path.exists(tmp_path):
+                        try: os.remove(tmp_path)
+                        except OSError: pass
+                    return False
+        else:
+            # Zenodo URLs
             if subset_idx <= 6:
                 url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
             else:
@@ -104,7 +121,6 @@ def download_and_extract_subset(subset_idx):
             print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
             start_dl = time.time()
             
-            global last_report
             last_report = -1
             
             def dl_progress(block_num, block_size, total_size):
@@ -114,9 +130,8 @@ def download_and_extract_subset(subset_idx):
                 if percent % 10 == 0 and percent != last_report:
                     print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
                     last_report = percent
-    
+                    
             try:
-                Path(lock_path).write_text(str(os.getpid()), encoding="utf-8")
                 urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
                 os.replace(tmp_path, zip_path)
                 print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
@@ -126,69 +141,26 @@ def download_and_extract_subset(subset_idx):
                     try: os.remove(tmp_path)
                     except OSError: pass
                 return False
-            finally:
-                if os.path.exists(lock_path):
-                    try: os.remove(lock_path)
-                    except OSError: pass
-    else:
-        # Zenodo URLs
-        if subset_idx <= 6:
-            url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
-        else:
-            url = f"https://zenodo.org/api/records/4121926/files/subset{subset_idx}.zip/content"
             
-        print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
-        start_dl = time.time()
-        
-        last_report = -1
-        
-        def dl_progress(block_num, block_size, total_size):
-            global last_report
-            downloaded = block_num * block_size
-            percent = int(downloaded * 100 / total_size) if total_size > 0 else 0
-            if percent % 10 == 0 and percent != last_report:
-                print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
-                last_report = percent
-                
+        print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
+        start_ex = time.time()
         try:
-            urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
-            os.replace(tmp_path, zip_path)
-            print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
+            safe_extract_zip(zip_path, target_staging)
+            if not os.path.exists(extract_path) or len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) == 0:
+                raise RuntimeError(f"Extraction verification failed: {extract_path} missing or contains no .mhd scans")
+            print(f"   Extraction completed and verified in {time.time() - start_ex:.1f} seconds.")
         except Exception as e:
-            print(f"   Download failed: {e}")
+            print(f"   Extraction failed: {e}")
+            if os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                    print(f"   Deleted corrupt zip archive: {zip_path}")
+                except Exception as del_err:
+                    print(f"   Failed to delete corrupt zip: {del_err}")
             return False
-        
-    print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
-    start_ex = time.time()
-    try:
-        # Determine target directory matching subset_dir
-        if subset_idx == 0:
-            target_staging = Path(data_dir_c).resolve()
-        else:
-            target_staging = Path(data_dir_d).resolve()
             
-        safe_extract_zip(zip_path, target_staging)
-        
-        # Verify extraction populated extract_path with .mhd scans
-        if not os.path.exists(extract_path) or len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) == 0:
-            raise RuntimeError(f"Extraction verification failed: {extract_path} missing or contains no .mhd scans")
-            
-        print(f"   Extraction completed and verified in {time.time() - start_ex:.1f} seconds.")
-    except Exception as e:
-        print(f"   Extraction failed: {e}")
-        # Always delete the zip file if extraction fails so the next attempt downloads it fresh
-        if os.path.exists(zip_path):
-            try:
-                os.remove(zip_path)
-                print(f"   Deleted corrupt zip archive: {zip_path}")
-            except Exception as del_err:
-                print(f"   Failed to delete corrupt zip: {del_err}")
-        return False
-        
-    print(f"   Preserving {zip_name} zip archive on D: drive for future reuse.")
-        
-    return True
-
+        print(f"   Preserving {zip_name} zip archive on D: drive for future reuse.")
+        return True
 def get_file_sha256(filepath):
     import hashlib
     h = hashlib.sha256()
@@ -198,6 +170,68 @@ def get_file_sha256(filepath):
             h.update(chunk)
             chunk = f.read(8192)
     return h.hexdigest()
+
+
+REQUIRED_CACHE_ARRAY_KEYS = {"X", "y", "groups", "coords"}
+
+def validate_subset_cache(cache_dir, subset_idx):
+    """
+    Strictly validates a v3.1 subset cache:
+    - metadata.json exists and has algorithm_version == 'v3.1'
+    - array_hashes contains EXACTLY {"X", "y", "groups", "coords"}
+    - all 4 .npy files exist and match their SHA256 hashes exactly
+    - array dimensions, non-emptiness, label validity, and finiteness are verified
+    Returns (X, y, groups, coords, metadata) or raises ValueError
+    """
+    cache_path = Path(cache_dir)
+    metadata_path = cache_path / "metadata.json"
+    if not metadata_path.exists():
+        raise ValueError(f"Cache metadata missing at: {metadata_path}")
+        
+    with metadata_path.open("r", encoding="utf-8") as f:
+        meta = json.load(f)
+        
+    if meta.get("algorithm_version") != "v3.1" or meta.get("feature_version") != "v3.1":
+        raise ValueError(f"Cache version mismatch: expected v3.1, got {meta.get('algorithm_version')}")
+    if meta.get("subset_ids") != [int(subset_idx)]:
+        raise ValueError(f"Subset ID mismatch: expected {[int(subset_idx)]}, got {meta.get('subset_ids')}")
+    if meta.get("feature_dimension") != 31:
+        raise ValueError(f"Feature dimension mismatch: expected 31, got {meta.get('feature_dimension')}")
+        
+    array_hashes = meta.get("array_hashes")
+    if not isinstance(array_hashes, dict) or set(array_hashes.keys()) != REQUIRED_CACHE_ARRAY_KEYS:
+        raise ValueError(f"array_hashes must contain exactly {REQUIRED_CACHE_ARRAY_KEYS}, got {set(array_hashes.keys()) if isinstance(array_hashes, dict) else None}")
+        
+    array_files = {
+        "X": cache_path / "X.npy",
+        "y": cache_path / "y.npy",
+        "groups": cache_path / "groups.npy",
+        "coords": cache_path / "coords.npy"
+    }
+    
+    for key, fpath in array_files.items():
+        if not fpath.exists():
+            raise ValueError(f"Missing cache file: {fpath}")
+        actual_h = get_file_sha256(str(fpath))
+        if actual_h != array_hashes[key]:
+            raise ValueError(f"{key} cache SHA256 mismatch for subset{subset_idx}: expected {array_hashes[key]}, got {actual_h}")
+            
+    X = np.load(array_files["X"], allow_pickle=False)
+    y = np.load(array_files["y"], allow_pickle=False)
+    groups = np.load(array_files["groups"], allow_pickle=False)
+    coords = np.load(array_files["coords"], allow_pickle=False)
+    
+    n = len(y)
+    if X.ndim != 2 or X.shape != (n, 31):
+        raise ValueError(f"Invalid X shape: {X.shape}, expected ({n}, 31)")
+    if y.ndim != 1 or groups.ndim != 1 or coords.ndim != 2 or coords.shape != (n, 3):
+        raise ValueError("Cache array shape mismatch")
+    if len(groups) != n or not np.isfinite(X).all() or not np.isin(y, [0, 1]).all():
+        raise ValueError("Invalid feature values or non-binary labels")
+    if not np.isfinite(coords).all():
+        raise ValueError("Non-finite coordinates")
+        
+    return X, y, groups, coords, meta
 
 def process_and_save_subset(subset_idx):
     # Dynamic path resolution (Issue 5 portability)
@@ -209,12 +243,14 @@ def process_and_save_subset(subset_idx):
     else:
         data_dir_d = str(project_root / "luna16_data" / "large_data")
     
-    # Skip reprocessing if valid cache exists (Issue 2/3 optimization)
+    # Skip reprocessing only if entire cache is validated
     cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
-    metadata_path = os.path.join(cache_dir, "metadata.json")
-    if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
-        print(f"   [STEP 3] Valid cache for subset{subset_idx} already exists. Skipping extraction.")
+    try:
+        validate_subset_cache(cache_dir, subset_idx)
+        print(f"   [STEP 3] Valid, complete v3.1 cache for subset{subset_idx} verified. Skipping extraction.")
         return True
+    except (ValueError, FileNotFoundError, OSError) as e:
+        print(f"   [STEP 3] Cache for subset{subset_idx} invalid or missing ({e}). Proceeding to extract and build...")
         
     annotations_path = os.path.join(data_dir_c, "annotations.csv")
     candidates_path = os.path.join(data_dir_c, "candidates_V2.csv")
@@ -417,55 +453,8 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
     
     for subset_idx in subsets_list:
         cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
-        metadata_path = os.path.join(cache_dir, "metadata.json")
-        
-        if not os.path.exists(metadata_path):
-            raise ValueError(f"Cache metadata missing for subset{subset_idx} at: {metadata_path}")
-            
-        with open(metadata_path, "r") as f:
-            meta = json.load(f)
-            
-        # Verify metadata
-        if meta["feature_dimension"] != 31:
-            raise ValueError(f"Feature dimension mismatch for subset{subset_idx}: expected 31, got {meta['feature_dimension']}")
-        if meta["algorithm_version"] != "v3.1" or meta["feature_version"] != "v3.1":
-            raise ValueError(f"Version mismatch for subset{subset_idx}: expected v3.0, got algorithm {meta['algorithm_version']}, feature {meta['feature_version']}")
-        if meta["subset_ids"] != [subset_idx]:
-            raise ValueError(f"Subset ID mismatch inside metadata: expected {[subset_idx]}, got {meta['subset_ids']}")
-            
-        # Verify all required arrays exist and can be loaded without pickle.
-        array_paths = {
-            "X": os.path.join(cache_dir, "X.npy"),
-            "y": os.path.join(cache_dir, "y.npy"),
-            "groups": os.path.join(cache_dir, "groups.npy"),
-            "coords": os.path.join(cache_dir, "coords.npy"),
-        }
-        missing = [name for name, path in array_paths.items() if not os.path.isfile(path)]
-        if missing:
-            raise ValueError(f"Missing cache arrays for subset{subset_idx}: {missing}")
-        if "array_hashes" in meta:
-            for arr_name, arr_hash in meta["array_hashes"].items():
-                actual_h = get_file_sha256(array_paths[arr_name])
-                if actual_h != arr_hash:
-                    raise ValueError(f"{arr_name} cache SHA256 mismatch for subset{subset_idx}: expected {arr_hash}, got {actual_h}")
-        elif "SHA256 checksum" in meta:
-            if get_file_sha256(array_paths["X"]) != meta["SHA256 checksum"]:
-                raise ValueError(f"X cache SHA256 mismatch for subset{subset_idx}")
-
-        X = np.load(array_paths["X"], allow_pickle=False)
-        y = np.load(array_paths["y"], allow_pickle=False)
-        groups = np.load(array_paths["groups"], allow_pickle=False)
-        coords = np.load(array_paths["coords"], allow_pickle=False)
+        X, y, groups, coords, meta = validate_subset_cache(cache_dir, subset_idx)
         n = len(y)
-        if X.ndim != 2 or X.shape != (n, 31):
-            raise ValueError(f"Invalid X shape for subset{subset_idx}: {X.shape}; expected ({n}, 31)")
-        if y.ndim != 1 or groups.ndim != 1 or coords.ndim != 2 or coords.shape != (n, 3):
-            raise ValueError(f"Cache row/shape mismatch for subset{subset_idx}")
-        if len(groups) != n or not np.isfinite(X).all() or not np.isin(y, [0, 1]).all():
-            raise ValueError(f"Invalid feature values or labels in subset{subset_idx}")
-        if not np.isfinite(coords).all():
-            raise ValueError(f"Non-finite candidate coordinates in subset{subset_idx}")
-
         X_parts.append(X)
         y_parts.append(y)
         groups_parts.append(groups)

@@ -190,3 +190,53 @@ def safe_extract_zip(zip_file_path, target_dir, max_total_bytes=35 * (1024**3)):
 
             # Extract individual member safely
             zip_ref.extract(member, target_dir)
+
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def file_lock(lock_path, timeout=120, stale_age=1800, poll_interval=0.5):
+    """
+    OS-level atomic advisory lock using O_CREAT | os.O_EXCL.
+    Covers both download and extraction across processes.
+    Automatically clears stale locks older than stale_age seconds.
+    """
+    lock_path = Path(lock_path).resolve()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    start_time = time.time()
+    fd = None
+
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.write(fd, str(os.getpid()).encode("utf-8"))
+            break
+        except FileExistsError:
+            try:
+                mtime = os.path.getmtime(str(lock_path))
+                if (time.time() - mtime) > stale_age:
+                    try:
+                        os.remove(str(lock_path))
+                        continue
+                    except OSError:
+                        pass
+            except OSError:
+                pass
+
+            if (time.time() - start_time) > timeout:
+                raise TimeoutError(f"Failed to acquire file lock within {timeout}s: {lock_path}")
+            time.sleep(poll_interval)
+
+    try:
+        yield lock_path
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if lock_path.exists():
+            try:
+                os.remove(str(lock_path))
+            except OSError:
+                pass

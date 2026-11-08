@@ -7,8 +7,12 @@ import joblib
 from pathlib import Path
 import numpy as np
 
-from tq_bionet.data_loader import safe_extract_zip
-from tq_bionet.scale_clinical_validation import reconstruct_combined_dataset, get_file_sha256
+from tq_bionet.data_loader import safe_extract_zip, file_lock
+from tq_bionet.scale_clinical_validation import (
+    reconstruct_combined_dataset,
+    validate_subset_cache,
+    get_file_sha256
+)
 from tq_bionet.model_config import (
     fit_frozen_pipeline,
     save_pipeline_bundle,
@@ -19,7 +23,8 @@ from tq_bionet.model_config import (
 class TestReadinessRepairs(unittest.TestCase):
     """
     Stage 4.4 Verification: Regression tests for secure archive extraction,
-    bundle provenance integrity, resource-exhaustion defenses, and multi-array cache verification.
+    bundle provenance integrity, resource-exhaustion defenses, atomic file locking,
+    and multi-array cache verification.
     """
 
     def setUp(self):
@@ -78,7 +83,6 @@ class TestReadinessRepairs(unittest.TestCase):
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr("large.txt", "a" * 1000)
 
-        # Set max_total_bytes to 500 bytes (smaller than 1000)
         with self.assertRaises(RuntimeError) as ctx:
             safe_extract_zip(zip_path, target_dir, max_total_bytes=500)
         self.assertIn("Archive exceeds safe uncompressed size limit", str(ctx.exception))
@@ -96,6 +100,22 @@ class TestReadinessRepairs(unittest.TestCase):
         safe_extract_zip(zip_path, target_dir)
         self.assertTrue((target_dir / "subset0" / "scan1.mhd").exists())
         self.assertTrue((target_dir / "subset0" / "scan1.raw").exists())
+
+    def test_atomic_file_lock_mutual_exclusion(self):
+        """Verifies atomic O_CREAT|O_EXCL file lock blocks concurrent acquisition."""
+        lock_file = self.temp_dir / "test.lock"
+
+        with file_lock(lock_file, timeout=1.0):
+            self.assertTrue(lock_file.exists())
+            # Second attempt must timeout
+            with self.assertRaises(TimeoutError):
+                with file_lock(lock_file, timeout=0.2, poll_interval=0.05):
+                    pass
+
+        # After block exit, lock must be released and re-acquirable
+        self.assertFalse(lock_file.exists())
+        with file_lock(lock_file, timeout=1.0):
+            self.assertTrue(lock_file.exists())
 
     def test_pipeline_bundle_manifest_provenance(self):
         """Verifies manifest records real xgboost package version string, not module name."""
@@ -122,7 +142,6 @@ class TestReadinessRepairs(unittest.TestCase):
         bundle_dir = self.temp_dir / "bundle"
         save_pipeline_bundle(bundle_dir, svm, xgb, rf, scaler)
 
-        # Delete one model file
         (bundle_dir / "rf_model.joblib").unlink()
 
         with self.assertRaises(FileNotFoundError):
@@ -169,10 +188,9 @@ class TestReadinessRepairs(unittest.TestCase):
             load_pipeline_bundle(bundle_dir)
         self.assertIn("Hash mismatch on svm_model.joblib", str(ctx.exception))
 
-    def test_cache_multi_array_tamper_detection(self):
-        """Verifies reconstruct_combined_dataset detects tampering with y, groups, or coords."""
+    def _create_valid_subset_cache(self, subset_idx=0):
         data_dir = self.temp_dir / "luna16_data"
-        cache_dir = data_dir / "cache" / "tq_bionet_v3_1" / "subset0"
+        cache_dir = data_dir / "cache" / "tq_bionet_v3_1" / f"subset{subset_idx}"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         n = 10
@@ -195,7 +213,7 @@ class TestReadinessRepairs(unittest.TestCase):
             "algorithm_version": "v3.1",
             "feature_version": "v3.1",
             "feature_dimension": 31,
-            "subset_ids": [0],
+            "subset_ids": [subset_idx],
             "array_hashes": {
                 "X": get_file_sha256(str(X_p)),
                 "y": get_file_sha256(str(y_p)),
@@ -206,18 +224,49 @@ class TestReadinessRepairs(unittest.TestCase):
         with (cache_dir / "metadata.json").open("w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
 
+        return data_dir, cache_dir, (X_p, y_p, g_p, c_p)
+
+    def test_cache_multi_array_tamper_detection(self):
+        """Verifies reconstruct_combined_dataset detects tampering with y, groups, or coords."""
+        data_dir, cache_dir, (X_p, y_p, g_p, c_p) = self._create_valid_subset_cache(0)
+
         # Valid load succeeds
         X_c, y_c, g_c, c_c, s_c = reconstruct_combined_dataset([0], str(data_dir))
-        self.assertEqual(len(y_c), n)
+        self.assertEqual(len(y_c), 10)
 
         # Tamper with y.npy
-        y_tampered = np.ones(n, dtype=np.int16)
+        y_tampered = np.ones(10, dtype=np.int16)
         np.save(y_p, y_tampered)
 
-        # Reconstruct must fail on y checksum mismatch
         with self.assertRaises(ValueError) as ctx:
             reconstruct_combined_dataset([0], str(data_dir))
         self.assertIn("y cache SHA256 mismatch", str(ctx.exception))
+
+    def test_validate_subset_cache_requires_exact_four_keys(self):
+        """Verifies validate_subset_cache rejects manifests missing keys or with extra keys."""
+        data_dir, cache_dir, (X_p, y_p, g_p, c_p) = self._create_valid_subset_cache(0)
+        meta_file = cache_dir / "metadata.json"
+
+        # Missing coords key
+        with meta_file.open("r", encoding="utf-8") as f:
+            meta = json.load(f)
+        del meta["array_hashes"]["coords"]
+        with meta_file.open("w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2)
+
+        with self.assertRaises(ValueError) as ctx:
+            validate_subset_cache(cache_dir, 0)
+        self.assertIn("array_hashes must contain exactly", str(ctx.exception))
+
+    def test_validate_subset_cache_rejects_missing_file(self):
+        """Verifies validate_subset_cache raises ValueError when any .npy file is missing."""
+        data_dir, cache_dir, (X_p, y_p, g_p, c_p) = self._create_valid_subset_cache(0)
+        # Delete coords.npy
+        c_p.unlink()
+
+        with self.assertRaises(ValueError) as ctx:
+            validate_subset_cache(cache_dir, 0)
+        self.assertIn("Missing cache file", str(ctx.exception))
 
 
 if __name__ == "__main__":
