@@ -37,16 +37,29 @@ def load_dicom_series(dicom_dir):
     
     return itk_img, img_array, origin, spacing
 
-def world_to_voxel(world_coords, origin, spacing):
+def world_to_voxel(world_coords, origin, spacing, direction=None):
     """
-    Converts 3D world coordinates (X, Y, Z in mm) to voxel indices (Z, Y, X).
+    Convert physical (X, Y, Z) coordinates to NumPy (Z, Y, X) indices.
+
+    SimpleITK maps physical points as: p = origin + direction @ (index * spacing).
+    Direction is a row-major 3x3 direction-cosine matrix. Identity is used only
+    when callers explicitly omit direction for axis-aligned images.
     """
-    # world_coords order: (X, Y, Z)
-    # origin order: (X, Y, Z)
-    # spacing order: (X, Y, Z)
-    voxel_coords = np.round((world_coords - origin) / spacing).astype(int)
-    # Return in (Z, Y, X) order for indexing numpy array
-    return voxel_coords[2], voxel_coords[1], voxel_coords[0]
+    world_coords = np.asarray(world_coords, dtype=np.float64)
+    origin = np.asarray(origin, dtype=np.float64)
+    spacing = np.asarray(spacing, dtype=np.float64)
+    direction = np.eye(3) if direction is None else np.asarray(direction, dtype=np.float64).reshape(3, 3)
+    if world_coords.shape != (3,) or origin.shape != (3,) or spacing.shape != (3,):
+        raise ValueError("world_coords, origin, and spacing must each have shape (3,)")
+    if not np.all(np.isfinite(world_coords)) or not np.all(np.isfinite(origin)):
+        raise ValueError("world coordinates and origin must be finite")
+    if not np.all(np.isfinite(spacing)) or np.any(spacing <= 0):
+        raise ValueError("spacing must contain finite positive values")
+    if not np.all(np.isfinite(direction)) or abs(np.linalg.det(direction)) < 1e-10:
+        raise ValueError("direction must be a finite invertible 3x3 matrix")
+    continuous_index = np.linalg.solve(direction, world_coords - origin) / spacing
+    voxel_xyz = np.rint(continuous_index).astype(int)
+    return int(voxel_xyz[2]), int(voxel_xyz[1]), int(voxel_xyz[0])
 
 def extract_3d_patch(img_array, voxel_center, patch_size=32, fill_value=-1000):
     """
