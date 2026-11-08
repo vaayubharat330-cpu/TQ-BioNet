@@ -56,25 +56,26 @@ def download_and_extract_subset(subset_idx):
         print(f"\n[STEP 1] Unzipped folder '{extract_path}' already exists, skipping download and extraction.")
         return True
 
-    tmp_path = zip_path + ".tmp"
-    if os.path.exists(tmp_path):
-        # Clean up stale temp files older than 30 minutes
-        mtime = os.path.getmtime(tmp_path)
+    lock_path = zip_path + ".lock"
+    tmp_path = f"{zip_path}.tmp.{os.getpid()}"
+
+    if os.path.exists(lock_path):
+        mtime = os.path.getmtime(lock_path)
         if (time.time() - mtime) > 1800:
-            print(f"Removing stale temporary download file: {tmp_path}")
+            print(f"Removing stale lockfile: {lock_path}")
             try:
-                os.remove(tmp_path)
+                os.remove(lock_path)
             except OSError:
                 pass
         else:
-            print(f"\n[STEP 1] Detected active download of {zip_name} in progress (.tmp file found).")
-            print("         Waiting up to 120 seconds for downloader to finish...")
+            print(f"\n[STEP 1] Detected concurrent download of {zip_name} in progress (.lock found).")
+            print("         Waiting up to 120 seconds for lock release...")
             waited = 0
-            while os.path.exists(tmp_path) and waited < 120:
+            while os.path.exists(lock_path) and waited < 120:
                 time.sleep(10)
                 waited += 10
-            if os.path.exists(tmp_path):
-                raise TimeoutError(f"Concurrent download of {zip_name} timed out after 120s")
+            if os.path.exists(lock_path):
+                raise TimeoutError(f"Download lock for {zip_name} timed out after 120s")
 
     # Verify archive integrity via CRC32 testzip before skipping download
     if os.path.exists(zip_path):
@@ -115,12 +116,20 @@ def download_and_extract_subset(subset_idx):
                     last_report = percent
     
             try:
+                Path(lock_path).write_text(str(os.getpid()), encoding="utf-8")
                 urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
                 os.replace(tmp_path, zip_path)
                 print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
             except Exception as e:
                 print(f"   Download failed: {e}")
+                if os.path.exists(tmp_path):
+                    try: os.remove(tmp_path)
+                    except OSError: pass
                 return False
+            finally:
+                if os.path.exists(lock_path):
+                    try: os.remove(lock_path)
+                    except OSError: pass
     else:
         # Zenodo URLs
         if subset_idx <= 6:
@@ -359,8 +368,13 @@ def process_and_save_subset(subset_idx):
     np.save(groups_path, groups_new)
     np.save(coords_path, coords_new)
     
-    # Generate metadata.json
-    sha_hash = get_file_sha256(X_path)
+    # Generate metadata.json with independent hashes for all arrays
+    array_hashes = {
+        "X": get_file_sha256(X_path),
+        "y": get_file_sha256(y_path),
+        "groups": get_file_sha256(groups_path),
+        "coords": get_file_sha256(coords_path)
+    }
     
     metadata = {
         "algorithm_version": "v3.1",
@@ -371,7 +385,8 @@ def process_and_save_subset(subset_idx):
         "patient_count": int(len(np.unique(groups_new))),
         "sample_count": int(len(y_new)),
         "creation_time": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
-        "SHA256 checksum": sha_hash,
+        "SHA256 checksum": array_hashes["X"],
+        "array_hashes": array_hashes,
         "random_seed": 42
     }
     
@@ -428,8 +443,14 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
         missing = [name for name, path in array_paths.items() if not os.path.isfile(path)]
         if missing:
             raise ValueError(f"Missing cache arrays for subset{subset_idx}: {missing}")
-        if get_file_sha256(array_paths["X"]) != meta["SHA256 checksum"]:
-            raise ValueError(f"X cache SHA256 mismatch for subset{subset_idx}")
+        if "array_hashes" in meta:
+            for arr_name, arr_hash in meta["array_hashes"].items():
+                actual_h = get_file_sha256(array_paths[arr_name])
+                if actual_h != arr_hash:
+                    raise ValueError(f"{arr_name} cache SHA256 mismatch for subset{subset_idx}: expected {arr_hash}, got {actual_h}")
+        elif "SHA256 checksum" in meta:
+            if get_file_sha256(array_paths["X"]) != meta["SHA256 checksum"]:
+                raise ValueError(f"X cache SHA256 mismatch for subset{subset_idx}")
 
         X = np.load(array_paths["X"], allow_pickle=False)
         y = np.load(array_paths["y"], allow_pickle=False)

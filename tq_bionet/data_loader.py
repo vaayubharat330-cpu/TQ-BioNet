@@ -151,12 +151,14 @@ def patient_level_train_test_split(X_data, y_data, patient_ids, test_size=0.30, 
 import zipfile
 from pathlib import Path
 
-def safe_extract_zip(zip_file_path, target_dir):
+def safe_extract_zip(zip_file_path, target_dir, max_total_bytes=35 * (1024**3)):
     """
     Extracts a ZIP archive securely:
     - Verifies CRC32 archive integrity with testzip().
     - Protects against Zip Slip path traversal using Path.relative_to.
     - Rejects symlink entries.
+    - Defends against resource-exhaustion zip bombs (total uncompressed size and compression ratios).
+    - Extracts member-by-member securely.
     """
     target_dir = Path(target_dir).resolve()
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -165,16 +167,26 @@ def safe_extract_zip(zip_file_path, target_dir):
         if bad_file:
             raise RuntimeError(f"Corrupt entry inside zip archive: {bad_file}")
 
+        total_uncompressed = 0
         for member in zip_ref.infolist():
             # Check for symlink attribute (UNIX mode 0o120000)
             mode = (member.external_attr >> 16) & 0o170000
             if mode == 0o120000:
                 raise RuntimeError(f"Symlinks are disallowed in archives: {member.filename}")
 
+            # Check for Zip Slip traversal
             member_path = (target_dir / member.filename).resolve()
             try:
                 member_path.relative_to(target_dir)
             except ValueError:
                 raise RuntimeError(f"Zip slip path traversal detected: {member.filename}")
 
-        zip_ref.extractall(target_dir)
+            # Resource exhaustion / Zip bomb checks
+            total_uncompressed += member.file_size
+            if total_uncompressed > max_total_bytes:
+                raise RuntimeError(f"Archive exceeds safe uncompressed size limit ({max_total_bytes} bytes)")
+            if member.compress_size > 0 and (member.file_size / member.compress_size > 100) and member.file_size > 10 * 1024 * 1024:
+                raise RuntimeError(f"Potential zip bomb detected: anomalous compression ratio for {member.filename}")
+
+            # Extract individual member safely
+            zip_ref.extract(member, target_dir)
