@@ -90,6 +90,32 @@ def run_independent_validation():
     print("Reconstructing independent validation cohort (Subsets 6-9) for evaluation...")
     X_val, y_val, groups_val, coords_val, subsets_val = reconstruct_combined_dataset(validation_subsets, data_dir_c)
     print(f"   Independent validation cohort size: {len(X_val)} samples")
+
+    # Hard split-integrity checks before fitting or evaluating any model.
+    dev_series = set(np.asarray(groups_dev).tolist())
+    val_series = set(np.asarray(groups_val).tolist())
+    overlap = dev_series.intersection(val_series)
+    if overlap:
+        raise RuntimeError(
+            f"SeriesUID leakage between development and validation cohorts: "
+            f"{len(overlap)} overlapping series; examples={list(sorted(overlap))[:5]}"
+        )
+    if set(np.unique(subsets_dev).tolist()) != {0, 1, 2, 3, 4, 5}:
+        raise RuntimeError("Development cohort does not contain exactly subsets 0-5")
+    if set(np.unique(subsets_val).tolist()) != {6, 7, 8, 9}:
+        raise RuntimeError("Validation cohort does not contain exactly subsets 6-9")
+    if not (len(X_dev) == len(y_dev) == len(groups_dev) == len(coords_dev) == len(subsets_dev)):
+        raise RuntimeError("Development cohort arrays have inconsistent lengths")
+    if not (len(X_val) == len(y_val) == len(groups_val) == len(coords_val) == len(subsets_val)):
+        raise RuntimeError("Validation cohort arrays have inconsistent lengths")
+    if not np.isfinite(X_dev).all() or not np.isfinite(X_val).all():
+        raise RuntimeError("Non-finite feature values found in a cohort")
+    if not np.isin(y_dev, [0, 1]).all() or not np.isin(y_val, [0, 1]).all():
+        raise RuntimeError("Non-binary labels found in a cohort")
+
+    print(f"   Development SeriesUIDs: {len(dev_series)}")
+    print(f"   Validation SeriesUIDs: {len(val_series)}")
+    print("   Split integrity: PASS (zero overlapping SeriesUIDs)")
     
     # 3. Feature Selection: Prune to 15 frozen features using central model_config
     X_dev_pruned = prune_to_selected_features(X_dev)
