@@ -158,8 +158,7 @@ def run_independent_validation():
     # 7. Outputs Save & Cleanup
     outputs_dir = project_root / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
-    artifacts_dir = r"C:\Users\suraj\.gemini\antigravity\brain\2276150a-3f7e-4079-b867-712c3f036612"
-
+    
     # Evaluate each subset separately and save per-subset JSON metrics
     per_subset_metrics = {}
     for sub in validation_subsets:
@@ -180,9 +179,6 @@ def run_independent_validation():
             sub_path = outputs_dir / f"validation_subset{sub}_metrics.json"
             with open(sub_path, "w") as f:
                 json.dump(sub_dict, f, indent=4)
-            if os.path.exists(artifacts_dir):
-                with open(os.path.join(artifacts_dir, f"validation_subset{sub}_metrics.json"), "w") as f:
-                    json.dump(sub_dict, f, indent=4)
                     
     # Save predictions
     df_preds = pd.DataFrame({
@@ -245,7 +241,7 @@ def run_independent_validation():
     # Save validation summary markdown
     summary_md = f"""# TQ-BioNet v3.1 Independent Validation Summary
 
-This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the completely unseen independent validation cohort (Subsets 6–9).
+This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the independent evaluation cohort (SeriesUID-separated Subsets 6–9). Note: SeriesUID separation establishes scan-level independence, which is conditional on confirming patient-level separation where scans originate from distinct individuals.
 
 ## Validation Scope
 - **Validation Date**: {manifest_val["date"]} UTC
@@ -256,14 +252,14 @@ This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v
 
 ## Independent Validation Cohort Metrics (Combined Subsets 6–9)
 
-| Metric | Support Vector Machine (SVM) | XGBoost Classifier | Voting Ensemble |
+| Metric [CI Type] | Support Vector Machine (SVM) | XGBoost Classifier | Voting Ensemble |
 | :--- | :--- | :--- | :--- |
-| **Accuracy** | {metrics_svm["accuracy"]:.4f} [{metrics_svm["accuracy_ci"][0]:.3f} - {metrics_svm["accuracy_ci"][1]:.3f}] | {metrics_xgb["accuracy"]:.4f} [{metrics_xgb["accuracy_ci"][0]:.3f} - {metrics_xgb["accuracy_ci"][1]:.3f}] | {metrics_ens["accuracy"]:.4f} [{metrics_ens["accuracy_ci"][0]:.3f} - {metrics_ens["accuracy_ci"][1]:.3f}] |
-| **Sensitivity** | {metrics_svm["sensitivity"]:.4f} [{metrics_svm["sensitivity_ci"][0]:.3f} - {metrics_svm["sensitivity_ci"][1]:.3f}] | {metrics_xgb["sensitivity"]:.4f} [{metrics_xgb["sensitivity_ci"][0]:.3f} - {metrics_xgb["sensitivity_ci"][1]:.3f}] | {metrics_ens["sensitivity"]:.4f} [{metrics_ens["sensitivity_ci"][0]:.3f} - {metrics_ens["sensitivity_ci"][1]:.3f}] |
-| **Specificity** | {metrics_svm["specificity"]:.4f} [{metrics_svm["specificity_ci"][0]:.3f} - {metrics_svm["specificity_ci"][1]:.3f}] | {metrics_xgb["specificity"]:.4f} [{metrics_xgb["specificity_ci"][0]:.3f} - {metrics_xgb["specificity_ci"][1]:.3f}] | {metrics_ens["specificity"]:.4f} [{metrics_ens["specificity_ci"][0]:.3f} - {metrics_ens["specificity_ci"][1]:.3f}] |
-| **Precision** | {metrics_svm["precision"]:.4f} [{metrics_svm["precision_ci"][0]:.3f} - {metrics_svm["precision_ci"][1]:.3f}] | {metrics_xgb["precision"]:.4f} [{metrics_xgb["precision_ci"][0]:.3f} - {metrics_xgb["precision_ci"][1]:.3f}] | {metrics_ens["precision"]:.4f} [{metrics_ens["precision_ci"][0]:.3f} - {metrics_ens["precision_ci"][1]:.3f}] |
-| **F1-Score** | {metrics_svm["f1"]:.4f} [{metrics_svm["f1_ci"][0]:.3f} - {metrics_svm["f1_ci"][1]:.3f}] | {metrics_xgb["f1"]:.4f} [{metrics_xgb["f1_ci"][0]:.3f} - {metrics_xgb["f1_ci"][1]:.3f}] | {metrics_ens["f1"]:.4f} [{metrics_ens["f1_ci"][0]:.3f} - {metrics_ens["f1_ci"][1]:.3f}] |
-| **AUC-ROC** | {metrics_svm["auc"]:.4f} [{metrics_svm["auc_ci"][0]:.3f} - {metrics_svm["auc_ci"][1]:.3f}] | {metrics_xgb["auc"]:.4f} [{metrics_xgb["auc_ci"][0]:.3f} - {metrics_xgb["auc_ci"][1]:.3f}] | {metrics_ens["auc"]:.4f} [{metrics_ens["auc_ci"][0]:.3f} - {metrics_ens["auc_ci"][1]:.3f}] |
+| **Accuracy** [Scan-Cluster Bootstrap 95%] | {metrics_svm["accuracy"]:.4f} [{metrics_svm["accuracy_ci"][0]:.3f} - {metrics_svm["accuracy_ci"][1]:.3f}] | {metrics_xgb["accuracy"]:.4f} [{metrics_xgb["accuracy_ci"][0]:.3f} - {metrics_xgb["accuracy_ci"][1]:.3f}] | {metrics_ens["accuracy"]:.4f} [{metrics_ens["accuracy_ci"][0]:.3f} - {metrics_ens["accuracy_ci"][1]:.3f}] |
+| **Sensitivity** [Candidate Wilson 95%] | {metrics_svm["sensitivity"]:.4f} [{metrics_svm["sensitivity_ci"][0]:.3f} - {metrics_svm["sensitivity_ci"][1]:.3f}] | {metrics_xgb["sensitivity"]:.4f} [{metrics_xgb["sensitivity_ci"][0]:.3f} - {metrics_xgb["sensitivity_ci"][1]:.3f}] | {metrics_ens["sensitivity"]:.4f} [{metrics_ens["sensitivity_ci"][0]:.3f} - {metrics_ens["sensitivity_ci"][1]:.3f}] |
+| **Specificity** [Candidate Wilson 95%] | {metrics_svm["specificity"]:.4f} [{metrics_svm["specificity_ci"][0]:.3f} - {metrics_svm["specificity_ci"][1]:.3f}] | {metrics_xgb["specificity"]:.4f} [{metrics_xgb["specificity_ci"][0]:.3f} - {metrics_xgb["specificity_ci"][1]:.3f}] | {metrics_ens["specificity"]:.4f} [{metrics_ens["specificity_ci"][0]:.3f} - {metrics_ens["specificity_ci"][1]:.3f}] |
+| **Precision** [Candidate Wilson 95%] | {metrics_svm["precision"]:.4f} [{metrics_svm["precision_ci"][0]:.3f} - {metrics_svm["precision_ci"][1]:.3f}] | {metrics_xgb["precision"]:.4f} [{metrics_xgb["precision_ci"][0]:.3f} - {metrics_xgb["precision_ci"][1]:.3f}] | {metrics_ens["precision"]:.4f} [{metrics_ens["precision_ci"][0]:.3f} - {metrics_ens["precision_ci"][1]:.3f}] |
+| **F1-Score** [Scan-Cluster Bootstrap 95%] | {metrics_svm["f1"]:.4f} [{metrics_svm["f1_ci"][0]:.3f} - {metrics_svm["f1_ci"][1]:.3f}] | {metrics_xgb["f1"]:.4f} [{metrics_xgb["f1_ci"][0]:.3f} - {metrics_xgb["f1_ci"][1]:.3f}] | {metrics_ens["f1"]:.4f} [{metrics_ens["f1_ci"][0]:.3f} - {metrics_ens["f1_ci"][1]:.3f}] |
+| **AUC-ROC** [Scan-Cluster Bootstrap 95%] | {metrics_svm["auc"]:.4f} [{metrics_svm["auc_ci"][0]:.3f} - {metrics_svm["auc_ci"][1]:.3f}] | {metrics_xgb["auc"]:.4f} [{metrics_xgb["auc_ci"][0]:.3f} - {metrics_xgb["auc_ci"][1]:.3f}] | {metrics_ens["auc"]:.4f} [{metrics_ens["auc_ci"][0]:.3f} - {metrics_ens["auc_ci"][1]:.3f}] |
 
 ## Ensemble Confusion Matrix
 - **True Negatives**: {cm["tn"]}
@@ -274,17 +270,6 @@ This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v
     summary_path = outputs_dir / "validation_summary.md"
     with open(summary_path, "w") as f:
         f.write(summary_md)
-        
-    # Also save to conversation artifacts directory if available
-    if os.path.exists(artifacts_dir):
-        # copy metrics to artifacts
-        with open(os.path.join(artifacts_dir, "validation_metrics.json"), "w") as f:
-            json.dump(metrics_dict, f, indent=4)
-        df_cm.to_csv(os.path.join(artifacts_dir, "validation_confusion_matrix.csv"), index=False)
-        with open(os.path.join(artifacts_dir, "experiment_manifest_validation.json"), "w") as f:
-            json.dump(manifest_val, f, indent=4)
-        with open(os.path.join(artifacts_dir, "validation_summary.md"), "w") as f:
-            f.write(summary_md)
             
     print("\nValidation artifacts saved to outputs directory successfully.")
     

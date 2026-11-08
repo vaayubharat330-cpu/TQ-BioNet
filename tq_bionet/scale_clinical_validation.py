@@ -21,7 +21,7 @@ import subprocess
 warnings.filterwarnings('ignore', category=UserWarning, module='ripser')
 
 from tq_bionet.pipeline import extract_tq_bio_features
-from tq_bionet.data_loader import extract_3d_patch
+from tq_bionet.data_loader import extract_3d_patch, safe_extract_zip
 from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, plot_roc_pr_curves
 
 def get_git_commit():
@@ -58,11 +58,23 @@ def download_and_extract_subset(subset_idx):
 
     tmp_path = zip_path + ".tmp"
     if os.path.exists(tmp_path):
-        print(f"\n[STEP 1] Detected concurrent download of {zip_name} in progress (.tmp file found).")
-        print("         Waiting for concurrent downloader to finish...")
-        while os.path.exists(tmp_path):
-            time.sleep(10)
-        print(f"   Download completed by concurrent downloader.")
+        # Clean up stale temp files older than 30 minutes
+        mtime = os.path.getmtime(tmp_path)
+        if (time.time() - mtime) > 1800:
+            print(f"Removing stale temporary download file: {tmp_path}")
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        else:
+            print(f"\n[STEP 1] Detected active download of {zip_name} in progress (.tmp file found).")
+            print("         Waiting up to 120 seconds for downloader to finish...")
+            waited = 0
+            while os.path.exists(tmp_path) and waited < 120:
+                time.sleep(10)
+                waited += 10
+            if os.path.exists(tmp_path):
+                raise TimeoutError(f"Concurrent download of {zip_name} timed out after 120s")
 
     # Verify archive integrity via CRC32 testzip before skipping download
     if os.path.exists(zip_path):
@@ -103,7 +115,8 @@ def download_and_extract_subset(subset_idx):
                     last_report = percent
     
             try:
-                urllib.request.urlretrieve(url, zip_path, reporthook=dl_progress)
+                urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
+            os.replace(tmp_path, zip_path)
                 print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
             except Exception as e:
                 print(f"   Download failed: {e}")
@@ -129,7 +142,8 @@ def download_and_extract_subset(subset_idx):
                 last_report = percent
                 
         try:
-            urllib.request.urlretrieve(url, zip_path, reporthook=dl_progress)
+            urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
+            os.replace(tmp_path, zip_path)
             print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
         except Exception as e:
             print(f"   Download failed: {e}")
@@ -138,15 +152,19 @@ def download_and_extract_subset(subset_idx):
     print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
     start_ex = time.time()
     try:
-        target_dir = Path(data_dir_d).resolve()
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Audit archive against Zip Slip path traversal
-            for member in zip_ref.infolist():
-                member_path = (target_dir / member.filename).resolve()
-                if not str(member_path).startswith(str(target_dir)):
-                    raise RuntimeError(f"Zip slip path traversal detected: {member.filename}")
-            zip_ref.extractall(target_dir)
-        print(f"   Extraction completed in {time.time() - start_ex:.1f} seconds.")
+        # Determine target directory matching subset_dir
+        if subset_idx == 0:
+            target_staging = Path(data_dir_c).resolve()
+        else:
+            target_staging = Path(data_dir_d).resolve()
+            
+        safe_extract_zip(zip_path, target_staging)
+        
+        # Verify extraction populated extract_path with .mhd scans
+        if not os.path.exists(extract_path) or len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) == 0:
+            raise RuntimeError(f"Extraction verification failed: {extract_path} missing or contains no .mhd scans")
+            
+        print(f"   Extraction completed and verified in {time.time() - start_ex:.1f} seconds.")
     except Exception as e:
         print(f"   Extraction failed: {e}")
         # Always delete the zip file if extraction fails so the next attempt downloads it fresh

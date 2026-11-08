@@ -246,6 +246,7 @@ def save_pipeline_bundle(output_dir, svm, xgb, rf, scaler, metadata=None):
     joblib.dump(rf, out_path / "rf_model.joblib")
 
     import sklearn
+    import xgboost
     import scipy
 
     manifest = {
@@ -255,7 +256,7 @@ def save_pipeline_bundle(output_dir, svm, xgb, rf, scaler, metadata=None):
         "decision_threshold": DEFAULT_DECISION_THRESHOLD,
         "package_versions": {
             "scikit-learn": sklearn.__version__,
-            "xgboost": xgb.__class__.__module__,
+            "xgboost": getattr(xgboost, "__version__", "unknown"),
             "scipy": scipy.__version__,
             "numpy": np.__version__
         },
@@ -276,8 +277,10 @@ def save_pipeline_bundle(output_dir, svm, xgb, rf, scaler, metadata=None):
     return manifest
 
 
+REQUIRED_ARTIFACT_KEYS = {"scaler", "svm", "xgb", "rf"}
+
 def load_pipeline_bundle(bundle_dir):
-    """Loads a previously saved pipeline bundle and verifies manifest integrity."""
+    """Loads a previously saved pipeline bundle and verifies manifest schema and integrity."""
     in_path = Path(bundle_dir)
     manifest_file = in_path / "pipeline_manifest.json"
     if not manifest_file.exists():
@@ -286,12 +289,29 @@ def load_pipeline_bundle(bundle_dir):
     with manifest_file.open("r", encoding="utf-8") as f:
         manifest = json.load(f)
 
-    # Verify hashes
-    for key, expected_hash in manifest.get("artifact_hashes", {}).items():
+    # 1. Validate manifest schema
+    if manifest.get("pipeline_version") != "v3.1":
+        raise ValueError(f"Incompatible pipeline version: {manifest.get('pipeline_version')}")
+    if manifest.get("full_features_31") != FROZEN_31_FEATURES:
+        raise ValueError("31-feature schema in manifest does not match FROZEN_31_FEATURES")
+    if manifest.get("selected_features_15") != FROZEN_15_SELECTED_FEATURES:
+        raise ValueError("15-feature schema in manifest does not match FROZEN_15_SELECTED_FEATURES")
+
+    # 2. Check required artifact presence
+    hashes = manifest.get("artifact_hashes", {})
+    missing_keys = REQUIRED_ARTIFACT_KEYS - set(hashes.keys())
+    if missing_keys:
+        raise ValueError(f"Manifest missing required artifact hashes: {missing_keys}")
+
+    # 3. Verify hashes and load artifacts
+    for key in REQUIRED_ARTIFACT_KEYS:
         fname = f"{key}_model.joblib" if key != "scaler" else "scaler.joblib"
-        actual_hash = hashlib.sha256((in_path / fname).read_bytes()).hexdigest()
-        if actual_hash != expected_hash:
-            raise ValueError(f"Hash mismatch on {fname}: expected {expected_hash}, got {actual_hash}")
+        file_path = in_path / fname
+        if not file_path.exists():
+            raise FileNotFoundError(f"Missing bundle artifact file: {fname}")
+        actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        if actual_hash != hashes[key]:
+            raise ValueError(f"Hash mismatch on {fname}: expected {hashes[key]}, got {actual_hash}")
 
     scaler = joblib.load(in_path / "scaler.joblib")
     svm = joblib.load(in_path / "svm_model.joblib")

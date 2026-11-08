@@ -147,3 +147,34 @@ def patient_level_train_test_split(X_data, y_data, patient_ids, test_size=0.30, 
         y_test = np.array(y_test)
         
     return X_train, X_test, y_train, y_test, train_indices, test_indices
+
+import zipfile
+from pathlib import Path
+
+def safe_extract_zip(zip_file_path, target_dir):
+    """
+    Extracts a ZIP archive securely:
+    - Verifies CRC32 archive integrity with testzip().
+    - Protects against Zip Slip path traversal using Path.relative_to.
+    - Rejects symlink entries.
+    """
+    target_dir = Path(target_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        bad_file = zip_ref.testzip()
+        if bad_file:
+            raise RuntimeError(f"Corrupt entry inside zip archive: {bad_file}")
+
+        for member in zip_ref.infolist():
+            # Check for symlink attribute (UNIX mode 0o120000)
+            mode = (member.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise RuntimeError(f"Symlinks are disallowed in archives: {member.filename}")
+
+            member_path = (target_dir / member.filename).resolve()
+            try:
+                member_path.relative_to(target_dir)
+            except ValueError:
+                raise RuntimeError(f"Zip slip path traversal detected: {member.filename}")
+
+        zip_ref.extractall(target_dir)
