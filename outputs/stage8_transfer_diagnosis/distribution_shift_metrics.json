@@ -4,17 +4,20 @@
     "luna_dev": {
       "n": 1446,
       "pos": 723,
-      "neg": 723
+      "neg": 723,
+      "scans": 365
     },
     "luna_val": {
       "n": 926,
       "pos": 463,
-      "neg": 463
+      "neg": 463,
+      "scans": 236
     },
     "lndb_dev_folds0_2": {
       "n": 899,
       "pos": 577,
-      "neg": 322
+      "neg": 322,
+      "scans": 171
     }
   },
   "indomain_luna_shift": [

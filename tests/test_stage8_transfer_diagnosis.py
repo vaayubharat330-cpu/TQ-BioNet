@@ -28,15 +28,16 @@ def audit_metrics():
         return json.load(f)
 
 
-def test_partition_discipline_fold3_untouched(audit_metrics):
-    """Verify that exploratory analysis uses only LNDb Folds 0-2 (N=899) and leaves Fold 3 untouched."""
+def test_partition_discipline_fold3_excluded(audit_metrics):
+    """Verify that exploratory analysis uses only LNDb Folds 0-2 (N=899 across 171 scans) and excludes previously evaluated Fold 3."""
     cohorts = audit_metrics["cohorts"]
     assert "lndb_dev_folds0_2" in cohorts
     assert cohorts["lndb_dev_folds0_2"]["n"] == 899
     assert cohorts["lndb_dev_folds0_2"]["pos"] == 577
     assert cohorts["lndb_dev_folds0_2"]["neg"] == 322
+    assert cohorts["lndb_dev_folds0_2"]["scans"] == 171
 
-    # Ensure no Fold 3 evaluation is mixed into this stage
+    # Ensure Fold 3 evaluation is not mixed into this exploratory stage
     assert "lndb_test_fold3" not in cohorts
 
 
@@ -57,13 +58,13 @@ def test_indomain_luna16_drift_minimal(audit_metrics):
 
 
 def test_cross_cohort_drift_severity(audit_metrics):
-    """Verify that cross-cohort drift between LUNA16 and LNDb Folds 0-2 is significantly elevated."""
+    """Verify that cross-cohort drift between LUNA16 and LNDb Folds 0-2 is elevated (mean WD > 0.20, 11 features with PSI >= 0.10)."""
     overall = audit_metrics["cross_cohort_overall_shift"]
     avg_wd = np.mean([row["norm_wasserstein"] for row in overall])
-    severe_psi_count = sum(1 for row in overall if row["psi"] >= 0.10)
+    moderate_shift_count = sum(1 for row in overall if row["psi"] >= 0.10)
 
     assert avg_wd > 0.20, f"Expected substantial average Wasserstein distance, got {avg_wd}"
-    assert severe_psi_count >= 10, f"Expected at least 10 features with PSI >= 0.10, got {severe_psi_count}"
+    assert moderate_shift_count == 11, f"Expected exactly 11 features with PSI >= 0.10, got {moderate_shift_count}"
 
 
 def test_asymmetric_negative_shift(audit_metrics):

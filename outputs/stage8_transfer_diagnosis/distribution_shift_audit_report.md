@@ -1,30 +1,30 @@
 # TQ-BioNet Stage 8: LNDb Transfer Diagnosis — 15-Feature Distribution Shift Audit
 
-**Audit Date**: November 9, 2026  
+**Audit Date**: November 9, 2026 (Revised Stage 8.0.1)  
 **Cohorts Audited**:
-- **LUNA16 Development (Reference)**: Subsets 0–5 ($N=1446$, Pos=723, Neg=723)
-- **LUNA16 Validation (In-Domain Control)**: Subsets 6–9 ($N=926$, Pos=463, Neg=463)
-- **LNDb Exploratory Cohort (Transfer Diagnosis)**: Folds 0–2 ($N=899$, Pos=577, Neg=322) across 170 scans
-- **Held-Out Partition**: **LNDb Fold 3 is strictly untouched** ($N=320$ findings across 59 scans preserved for clean future evaluation).
+- **LUNA16 Development (Reference)**: Subsets 0–5 ($N=1446$, Pos=723, Neg=723, Scans=365)
+- **LUNA16 Validation (In-Domain Control)**: Subsets 6–9 ($N=926$, Pos=463, Neg=463, Scans=236)
+- **LNDb Exploratory Cohort (Transfer Diagnosis)**: Folds 0–2 ($N=899$, Pos=577, Neg=322, Scans=171) across 171 annotated scans
+- **Status of Fold 3**: **LNDb Fold 3 is excluded from this diagnostic study** ($N=320$ findings across 58 annotated scans). Fold 3 was previously evaluated during Stages 6E/6F and is deliberately excluded here to avoid cumulative tuning bias.
 
 ---
 
 ## 1. Executive Summary & Core Diagnostic Findings
 
-This audit explains why the zero-shot performance drops from **86.29% accuracy (0.9202 AUC)** on LUNA16 to **54.72% accuracy (0.5729 AUC)** on LNDb without training any new models.
+This audit examines the feature-level shifts between LUNA16 and LNDb to diagnose why zero-shot performance dropped from **86.29% accuracy (0.9202 AUC)** on LUNA16 to **54.72% accuracy (0.5729 AUC)** on LNDb without training any new models.
 
-### Key Discoveries:
-1. **Severe Cross-Cohort Drift vs Minimal In-Domain Drift**:
-   - Across LUNA16 Subsets 0–5 vs 6–9 (in-domain control), the maximum normalized Wasserstein distance across all 15 features is only **0.063** (average: **0.038**), with all PSIs $< 0.05$.
-   - In stark contrast, between LUNA16 and LNDb Folds 0–2, the average normalized Wasserstein distance jumps **8.3x to 0.281**, and **9 out of 15 features exhibit severe distribution shift (PSI $\ge 0.25$)**.
+### Key Observations:
+1. **Elevated Cross-Cohort Drift vs Minimal In-Domain Drift**:
+   - Across LUNA16 Subsets 0–5 vs 6–9 (in-domain control), the maximum normalized Wasserstein distance across all 15 features is only **0.063** (average: **0.038**), with all $\text{PSI} < 0.05$.
+   - In contrast, between LUNA16 and LNDb Folds 0–2, the average normalized Wasserstein distance increases **8.3x to 0.281**, and **11 out of 15 features exhibit moderate distribution shift ($0.10 \le \text{PSI} < 0.25$)**; zero features cross the $\text{PSI} \ge 0.25$ threshold overall.
 
-2. **Asymmetric Class-Conditional Divergence (The Negative Drift Trap)**:
-   - **Positive Nodules** drift primarily in **Differential Geometry / Hessian eigenvalues** (`hessian_L2` $W_d = 0.444$, `hessian_L3` $W_d = 0.424$, `hessian_L1` $W_d = 0.397$) due to differing acquisition resolutions and edge steepness.
-   - **Negative Non-Nodules** exhibit a much more catastrophic shift in **fractal dimension** ($W_d = 0.578$ vs $0.131$ in positives), **H0 entropy** ($W_d = 0.588$ vs $0.408$), and **quantum graph Laplacian eigenvalues** ($W_d \approx 0.51$ vs $0.12$ in positives).
-   - *Etiology*: In LUNA16, negative candidates are CAD-generated candidate false positives (vessel forks, bronchovascular bundles). In LNDb, negatives (`AgrLevel = 0`) are radiologist-reviewed non-nodule lesions (scarring, pleural thickening, apical caps), fundamentally altering the morphological baseline of the negative class.
+2. **Asymmetric Class-Conditional Divergence (Negative-Class Divergence)**:
+   - **Positive Nodules** show their largest shifts in **Differential Geometry / Hessian eigenvalues** (`hessian_L2` $W_d = 0.444$, `hessian_L3` $W_d = 0.424$, `hessian_L1` $W_d = 0.397$).
+   - **Negative Non-Nodules** exhibit much stronger shifts in **fractal dimension** ($W_d = 0.578$ vs $0.131$ in positives), **H0 entropy** ($W_d = 0.588$ vs $0.408$), and **quantum graph Laplacian eigenvalues** ($W_d \approx 0.51$ vs $0.12$ in positives). Within negatives specifically, 10 features exceed $\text{PSI}_{\text{neg}} \ge 0.25$.
+   - *Diagnostic Hypothesis*: These descriptive measurements support the hypothesis that differences in negative candidate generation (CAD candidate false positives in LUNA16 vs radiologist-reviewed non-nodules in LNDb) alter the morphological baseline of the negative class, while scanner acquisition variations contribute to positive nodule curvature differences. These hypotheses will be directly tested against acquisition parameters in Stage 8.1.
 
-3. **Topological and Fractal Fragility**:
-   - Persistent homology ($H_0, H_1$) and fractal lacunarity show moderate-to-severe shift across both classes, reflecting sensitivity to scanner noise floors and local slice interpolation.
+3. **Topological and Fractal Sensitivity**:
+   - Persistent homology ($H_0, H_1$) and fractal lacunarity show moderate shift across both classes, reflecting sensitivity to scanner noise floors and local slice interpolation.
 
 ---
 
@@ -103,9 +103,9 @@ To confirm that the LUNA16 validation cohort did not suffer from similar distrib
 
 ---
 
-## 6. Actionable Diagnostic Roadmap for Adaptation
+## 6. Actionable Diagnostic Roadmap for Stage 8.1
 
-Based on these empirical distributions, the transfer collapse is driven by two distinct mechanisms:
-1. **Negative Definition Mismatch**: Radiologist non-nodules in LNDb have radically lower fractal dimension and distinct quantum graph spectra compared to CAD candidate non-nodules in LUNA16. Any adaptation strategy must re-align negative feature baselines.
-2. **Hessian Eigenvalue Scaling**: Positive nodules in LNDb show systematically attenuated Hessian curvatures ($\\lambda_1, \\lambda_2, \\lambda_3$), likely caused by thicker reconstruction slices and smoothing filters in the European cohort.
-3. **Untouched Evaluation Safeguard**: LNDb Fold 3 ($N=320$) remains strictly held-out and isolated, guaranteeing that any future domain adaptation model can be evaluated cleanly.
+Based on these empirical distributions, the transfer diagnosis roadmap proceeds as follows:
+1. **Scanner & Acquisition Parameter Correlation (Stage 8.1)**: Join LNDb Folds 0–2 findings with `LNDbAcqParams.csv` to test whether Hessian curvature shifts or topological shifts track reconstruction kernels, slice spacing, or scanner models.
+2. **Negative Definition Investigation**: Evaluate how radiologist non-nodules differ geometrically from CAD candidates, using scan-level clustered observations.
+3. **Exclusion of Fold 3**: LNDb Fold 3 ($N=320$) remains excluded from exploratory correlation analyses to prevent repetitive tuning exposure.

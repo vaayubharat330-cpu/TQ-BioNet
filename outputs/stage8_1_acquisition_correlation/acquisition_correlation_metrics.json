@@ -1,0 +1,468 @@
+{
+  "analysis": "Stage 8.1: Scanner and Acquisition Parameter Correlation Analysis",
+  "metadata_info": {
+    "folds_0_2": {
+      "total_assigned_scans": 177,
+      "unannotated_scans": [
+        22,
+        141,
+        192,
+        216,
+        224,
+        309
+      ],
+      "annotated_scans": 171
+    },
+    "fold_3_status": {
+      "description": "PREVIOUSLY EVALUATED in Stages 6E/6F; strictly excluded from Stage 8.1 analysis",
+      "total_assigned_scans": 59,
+      "annotated_scans": 58
+    }
+  },
+  "results": {
+    "scanner_models": {
+      "subgroups": {
+        "SOMATOM go.Up": 73,
+        "Sensation Cardiac 64": 65,
+        "SOMATOM Definition Flash": 33
+      },
+      "kruskal_wallis": {
+        "H0_entropy": {
+          "H_statistic": 0.25503727871891324,
+          "p_value": 0.8802770078817334
+        },
+        "H0_total_persistence": {
+          "H_statistic": 0.00223743968827926,
+          "p_value": 0.9988819056896178
+        },
+        "H1_count": {
+          "H_statistic": 0.0005022100677467184,
+          "p_value": 0.999748926490357
+        },
+        "H1_total_persistence": {
+          "H_statistic": 0.0003689688908993279,
+          "p_value": 0.9998155325707592
+        },
+        "blobness_ratio": {
+          "H_statistic": 1.9847059628350507,
+          "p_value": 0.37070340578776295
+        },
+        "fractal_dimension": {
+          "H_statistic": 2.28142104388985,
+          "p_value": 0.3195918640927293
+        },
+        "hessian_L1": {
+          "H_statistic": 0.40141828144032843,
+          "p_value": 0.8181503635753606
+        },
+        "hessian_L2": {
+          "H_statistic": 0.6232692014888244,
+          "p_value": 0.7322490426056321
+        },
+        "hessian_L3": {
+          "H_statistic": 1.4208959338383238,
+          "p_value": 0.49142400644733186
+        },
+        "lacunarity_4": {
+          "H_statistic": 0.21457935174339582,
+          "p_value": 0.8982654294776921
+        },
+        "lacunarity_8": {
+          "H_statistic": 0.05347180182604916,
+          "p_value": 0.9736183392876686
+        },
+        "quantum_eigenvalue_0": {
+          "H_statistic": 0.9986551519791647,
+          "p_value": 0.6069386426446658
+        },
+        "quantum_eigenvalue_1": {
+          "H_statistic": 1.047457689962016,
+          "p_value": 0.5923078010677683
+        },
+        "quantum_eigenvalue_2": {
+          "H_statistic": 1.2169952599188036,
+          "p_value": 0.5441677966518308
+        },
+        "vesselness_ratio": {
+          "H_statistic": 0.5318199581810177,
+          "p_value": 0.7665081261539606
+        }
+      }
+    },
+    "convolution_kernels": {
+      "main_subgroups": {
+        "Br64f": 67,
+        "B50f": 68,
+        "I50f": 26
+      },
+      "rare_subgroups_small_sample_size": {
+        "Br60f": 4,
+        "B31f": 1,
+        "I70f": 1,
+        "B70f": 1,
+        "D33f": 1,
+        "Br56f": 1,
+        "Br40f": 1
+      },
+      "kruskal_wallis_main_kernels": {
+        "H0_entropy": {
+          "H_statistic": 0.2763450778677362,
+          "p_value": 0.8709484062716513
+        },
+        "H0_total_persistence": {
+          "H_statistic": 0.49897481182198056,
+          "p_value": 0.7792000940828122
+        },
+        "H1_count": {
+          "H_statistic": 0.5297071809825162,
+          "p_value": 0.7673182844453121
+        },
+        "H1_total_persistence": {
+          "H_statistic": 0.5231729496496156,
+          "p_value": 0.7698293016919109
+        },
+        "blobness_ratio": {
+          "H_statistic": 0.3496667706500034,
+          "p_value": 0.8395968982803973
+        },
+        "fractal_dimension": {
+          "H_statistic": 0.33351662877947774,
+          "p_value": 0.8464041503227262
+        },
+        "hessian_L1": {
+          "H_statistic": 0.38712031621525966,
+          "p_value": 0.8240202632043342
+        },
+        "hessian_L2": {
+          "H_statistic": 0.5428874290194585,
+          "p_value": 0.7622781874620955
+        },
+        "hessian_L3": {
+          "H_statistic": 0.8511238280677844,
+          "p_value": 0.6534025259063675
+        },
+        "lacunarity_4": {
+          "H_statistic": 0.4928810661909324,
+          "p_value": 0.7815778381697683
+        },
+        "lacunarity_8": {
+          "H_statistic": 0.38085322150288903,
+          "p_value": 0.8266064195270474
+        },
+        "quantum_eigenvalue_0": {
+          "H_statistic": 1.137707446578645,
+          "p_value": 0.5661740590173752
+        },
+        "quantum_eigenvalue_1": {
+          "H_statistic": 1.1335185521542712,
+          "p_value": 0.567361123384782
+        },
+        "quantum_eigenvalue_2": {
+          "H_statistic": 1.307008352185278,
+          "p_value": 0.5202196378556083
+        },
+        "vesselness_ratio": {
+          "H_statistic": 0.49952277621480334,
+          "p_value": 0.7789866363727327
+        }
+      }
+    },
+    "in_plane_spacing": {
+      "range_mm": [
+        0.43278905749320984,
+        0.89453125
+      ],
+      "mean_mm": 0.6366720370381896,
+      "spearman_correlations": {
+        "H0_entropy": {
+          "spearman_rho": 0.08998666769522076,
+          "p_value": 0.2418103683363292
+        },
+        "H0_total_persistence": {
+          "spearman_rho": 0.08280847661103033,
+          "p_value": 0.28158327697224417
+        },
+        "H1_count": {
+          "spearman_rho": 0.08996976097616617,
+          "p_value": 0.24189918868864063
+        },
+        "H1_total_persistence": {
+          "spearman_rho": 0.08984290768573092,
+          "p_value": 0.2425663450402383
+        },
+        "blobness_ratio": {
+          "spearman_rho": -0.061295974761045015,
+          "p_value": 0.42578850994250544
+        },
+        "fractal_dimension": {
+          "spearman_rho": 0.05490650107744484,
+          "p_value": 0.4756801068195028
+        },
+        "hessian_L1": {
+          "spearman_rho": 0.028064229705536715,
+          "p_value": 0.7155836103600779
+        },
+        "hessian_L2": {
+          "spearman_rho": 0.062136221159414376,
+          "p_value": 0.41946061034675153
+        },
+        "hessian_L3": {
+          "spearman_rho": 0.09677837981218554,
+          "p_value": 0.20795187877126498
+        },
+        "lacunarity_4": {
+          "spearman_rho": -0.019706178745756895,
+          "p_value": 0.7980848162538162
+        },
+        "lacunarity_8": {
+          "spearman_rho": 0.01058950532344931,
+          "p_value": 0.8906640998700549
+        },
+        "quantum_eigenvalue_0": {
+          "spearman_rho": 0.06483941385816838,
+          "p_value": 0.3994782181377604
+        },
+        "quantum_eigenvalue_1": {
+          "spearman_rho": 0.07399689924839677,
+          "p_value": 0.3361213573867755
+        },
+        "quantum_eigenvalue_2": {
+          "spearman_rho": 0.07647802682758172,
+          "p_value": 0.3201246977794897
+        },
+        "vesselness_ratio": {
+          "spearman_rho": -0.02952025667871105,
+          "p_value": 0.7015124433581096
+        }
+      }
+    },
+    "slice_spacing_z": {
+      "description": "Voxel slice thickness along Z axis",
+      "subgroups": {
+        "1.0": 121,
+        "1.0002": 12,
+        "1.0003": 11,
+        "1.0001": 5,
+        "1.0004": 5,
+        "0.9999": 4,
+        "0.9997": 4,
+        "0.9996": 3,
+        "0.7": 1,
+        "1.0005": 1,
+        "1.4": 1,
+        "0.8001": 1,
+        "0.8": 1,
+        "0.9995": 1
+      },
+      "note": "167/171 scans have slice spacing approx 1.0mm; negligible variance in Folds 0-2"
+    },
+    "tube_voltage_kvp": {
+      "subgroups": {
+        "130.0": 70,
+        "120.0": 67,
+        "100.0": 29,
+        "110.0": 3,
+        "140.0": 1,
+        "nan": 1
+      },
+      "kruskal_wallis_main_kvp": {
+        "H0_entropy": {
+          "H_statistic": 0.011884737994872304,
+          "p_value": 0.9940752519565339
+        },
+        "H0_total_persistence": {
+          "H_statistic": 0.091267269094218,
+          "p_value": 0.9553919206741573
+        },
+        "H1_count": {
+          "H_statistic": 0.11675010623037754,
+          "p_value": 0.9432960949452521
+        },
+        "H1_total_persistence": {
+          "H_statistic": 0.11638897370872077,
+          "p_value": 0.9434664377725913
+        },
+        "blobness_ratio": {
+          "H_statistic": 0.2738362935104419,
+          "p_value": 0.8720416026456288
+        },
+        "fractal_dimension": {
+          "H_statistic": 1.0938932433455193,
+          "p_value": 0.578714148652768
+        },
+        "hessian_L1": {
+          "H_statistic": 0.3270646765815286,
+          "p_value": 0.8491390388524414
+        },
+        "hessian_L2": {
+          "H_statistic": 0.3297675773096671,
+          "p_value": 0.8479922446814826
+        },
+        "hessian_L3": {
+          "H_statistic": 0.6004112400630675,
+          "p_value": 0.7406659092754954
+        },
+        "lacunarity_4": {
+          "H_statistic": 0.13951305933215963,
+          "p_value": 0.9326208577779975
+        },
+        "lacunarity_8": {
+          "H_statistic": 0.18364223007768032,
+          "p_value": 0.9122683260338152
+        },
+        "quantum_eigenvalue_0": {
+          "H_statistic": 0.5423182422902642,
+          "p_value": 0.7624951576488977
+        },
+        "quantum_eigenvalue_1": {
+          "H_statistic": 0.5840681664548697,
+          "p_value": 0.7467430841252475
+        },
+        "quantum_eigenvalue_2": {
+          "H_statistic": 0.7088726638643834,
+          "p_value": 0.7015687836984419
+        },
+        "vesselness_ratio": {
+          "H_statistic": 0.619331287366947,
+          "p_value": 0.7336922298490478
+        }
+      }
+    },
+    "stratified_zero_shot_performance": {
+      "by_scanner_model": {
+        "SOMATOM Definition Flash": {
+          "scans": 33,
+          "findings": 167,
+          "positives": 93,
+          "negatives": 74,
+          "accuracy": 0.5568862275449101,
+          "sensitivity": 0.4838709677419355,
+          "specificity": 0.6486486486486487,
+          "brier_score": 0.2770803778152289
+        },
+        "SOMATOM go.Up": {
+          "scans": 73,
+          "findings": 403,
+          "positives": 260,
+          "negatives": 143,
+          "accuracy": 0.5285359801488834,
+          "sensitivity": 0.5192307692307693,
+          "specificity": 0.5454545454545454,
+          "brier_score": 0.28817535886142165
+        },
+        "Sensation Cardiac 64": {
+          "scans": 65,
+          "findings": 329,
+          "positives": 224,
+          "negatives": 105,
+          "accuracy": 0.6170212765957447,
+          "sensitivity": 0.5758928571428571,
+          "specificity": 0.7047619047619048,
+          "brier_score": 0.23753606570119137
+        }
+      },
+      "by_convolution_kernel": {
+        "B31f": {
+          "scans": 1,
+          "findings": 3,
+          "positives": 3,
+          "negatives": 0,
+          "accuracy": 0.6666666666666666,
+          "sensitivity": 0.6666666666666666,
+          "specificity": null,
+          "brier_score": 0.1563016441412421
+        },
+        "B50f": {
+          "scans": 68,
+          "findings": 338,
+          "positives": 230,
+          "negatives": 108,
+          "accuracy": 0.6183431952662722,
+          "sensitivity": 0.5826086956521739,
+          "specificity": 0.6944444444444444,
+          "brier_score": 0.23779013945253705
+        },
+        "B70f": {
+          "scans": 1,
+          "findings": 3,
+          "positives": 2,
+          "negatives": 1,
+          "accuracy": 0.3333333333333333,
+          "sensitivity": 0.0,
+          "specificity": 1.0,
+          "brier_score": 0.34351192339908393
+        },
+        "Br40f": {
+          "scans": 1,
+          "findings": 8,
+          "positives": 3,
+          "negatives": 5,
+          "accuracy": 0.625,
+          "sensitivity": 1.0,
+          "specificity": 0.4,
+          "brier_score": 0.2618825728455054
+        },
+        "Br56f": {
+          "scans": 1,
+          "findings": 10,
+          "positives": 7,
+          "negatives": 3,
+          "accuracy": 0.5,
+          "sensitivity": 0.5714285714285714,
+          "specificity": 0.3333333333333333,
+          "brier_score": 0.26687452186581473
+        },
+        "Br60f": {
+          "scans": 4,
+          "findings": 15,
+          "positives": 6,
+          "negatives": 9,
+          "accuracy": 0.4666666666666667,
+          "sensitivity": 0.5,
+          "specificity": 0.4444444444444444,
+          "brier_score": 0.30937322748142815
+        },
+        "Br64f": {
+          "scans": 67,
+          "findings": 370,
+          "positives": 244,
+          "negatives": 126,
+          "accuracy": 0.5297297297297298,
+          "sensitivity": 0.5122950819672131,
+          "specificity": 0.5634920634920635,
+          "brier_score": 0.28846017677705216
+        },
+        "D33f": {
+          "scans": 1,
+          "findings": 2,
+          "positives": 1,
+          "negatives": 1,
+          "accuracy": 1.0,
+          "sensitivity": 1.0,
+          "specificity": 1.0,
+          "brier_score": 0.11572898032633802
+        },
+        "I50f": {
+          "scans": 26,
+          "findings": 143,
+          "positives": 80,
+          "negatives": 63,
+          "accuracy": 0.5314685314685315,
+          "sensitivity": 0.4625,
+          "specificity": 0.6190476190476191,
+          "brier_score": 0.28731624845656095
+        },
+        "I70f": {
+          "scans": 1,
+          "findings": 7,
+          "positives": 1,
+          "negatives": 6,
+          "accuracy": 0.8571428571428571,
+          "sensitivity": 0.0,
+          "specificity": 1.0,
+          "brier_score": 0.17594276904511014
+        }
+      }
+    }
+  }
+}
