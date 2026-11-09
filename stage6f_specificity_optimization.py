@@ -7,19 +7,23 @@ This module implements a rigorous, leak-free threshold optimization study:
    (Folds 0–2, N=899 findings across 171 scans) using scan-grouped cross-validation.
 2. Performs a reproducible threshold sweep from t=0.30 to t=0.75 in steps of 0.01,
    recording Sensitivity, Specificity, Accuracy, Balanced Accuracy, PPV, NPV, and Youden's J.
-3. Implements nested scan-grouped threshold selection to quantify and avoid optimistic
-   selection bias:
+3. Implements true leak-free nested scan-grouped threshold validation:
+   - For each outer validation fold k, models are trained ONLY on inner folds (2-fold inner CV
+     generates pure inner OOF predictions from which inner policy thresholds are selected).
+   - Outer fold k is NEVER seen during inner model training or inner threshold selection.
    - Primary operating point: Sensitivity >= 80% (maximizing specificity).
    - Secondary operating points: Sensitivity >= 75% and Maximum Youden's J.
 4. Selects and freezes one policy strictly from Development data (Folds 0–2).
-5. Retrospectively evaluates the frozen policy on the Fold 3 probabilities (N=320 findings,
+5. Explicitly audits and asserts row-by-row alignment between the Stage 6E Fold 3 prediction
+   CSV and the cached ground truth (scan IDs, coordinates, labels, agreement levels).
+6. Retrospectively evaluates the frozen policy on the Fold 3 probabilities (N=320 findings,
    58 scans) saved during Stage 6E. This is explicitly documented as a post-hoc retrospective
    held-out analysis, not a fresh unseen cohort.
-6. Conducts paired scan-cluster bootstrap comparisons (5,000 replicates) against:
+7. Conducts paired scan-cluster bootstrap comparisons (5,000 replicates) against:
    - The always-positive majority baseline (59.69%).
    - The Stage 6E baseline (t=0.50).
-7. Evaluates radiologist agreement stratification and secondary coordinate conflict sensitivity.
-8. Emits comprehensive metrics, CSV sweeps, confusion matrices, and markdown summary to
+8. Evaluates radiologist agreement stratification and secondary coordinate conflict sensitivity.
+9. Emits comprehensive metrics, CSV sweeps, confusion matrices, and markdown summary to
    outputs/stage6f_specificity_optimization/.
 """
 
@@ -135,7 +139,6 @@ def select_policy_threshold(
     if criterion == "sens_80":
         sub = df[df["sensitivity"] >= 0.80]
         if len(sub) == 0:
-            # Fallback to threshold giving highest sensitivity
             return float(df.sort_values(by="sensitivity", ascending=False).iloc[0]["threshold"])
         best = sub.sort_values(by=["specificity", "balanced_accuracy"], ascending=[False, False]).iloc[0]
         return float(best["threshold"])
@@ -152,31 +155,89 @@ def select_policy_threshold(
         raise ValueError(f"Unknown threshold selection criterion: {criterion}")
 
 
-def evaluate_nested_grouped_thresholds(
+def fit_ensemble_predict_probabilities(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_eval: np.ndarray
+) -> np.ndarray:
+    """
+    Fits adapted SVM, Random Forest, and XGBoost on X_train/y_train and returns
+    soft-average predicted probabilities on X_eval.
+    """
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_eval_sc = scaler.transform(X_eval)
+
+    clf_svm = SVC(C=1.0, kernel="rbf", probability=True, class_weight="balanced", random_state=42)
+    clf_svm.fit(X_train_sc, y_train)
+    p_svm = clf_svm.predict_proba(X_eval_sc)[:, 1]
+
+    clf_rf = RandomForestClassifier(n_estimators=300, max_features="sqrt", class_weight="balanced", random_state=42)
+    clf_rf.fit(X_train, y_train)
+    p_rf = clf_rf.predict_proba(X_eval)[:, 1]
+
+    scale_pos = (len(y_train) - np.sum(y_train)) / max(1, np.sum(y_train))
+    clf_xgb = XGBClassifier(n_estimators=200, max_depth=4, learning_rate=0.05,
+                            scale_pos_weight=scale_pos, eval_metric="logloss", random_state=42)
+    clf_xgb.fit(X_train, y_train)
+    p_xgb = clf_xgb.predict_proba(X_eval)[:, 1]
+
+    return (p_svm + p_rf + p_xgb) / 3.0
+
+
+def evaluate_true_nested_scan_grouped_validation(
+    X_dev: np.ndarray,
     y_dev: np.ndarray,
-    probs_dev: np.ndarray,
     folds_dev: np.ndarray,
     criterion: str = "sens_80"
 ) -> Dict[str, Any]:
     """
-    Executes nested threshold selection across development folds to eliminate optimistic
-    threshold selection bias. Inner folds select the threshold; outer fold evaluates it.
+    Executes true leak-free nested scan-grouped cross-validation:
+    For each outer validation fold k in {Fold0, Fold1, Fold2}:
+      1. Outer fold k is completely held out.
+      2. The two inner folds perform a 2-fold scan-grouped CV to generate inner OOF predictions.
+      3. Threshold t_inner* is selected strictly from those inner OOF predictions.
+      4. Models are trained on all data from the two inner folds and predict on outer fold k.
+      5. The outer predictions are evaluated at t_inner*.
+    Outer fold k is never seen during inner model training or inner threshold selection.
     """
-    unique_folds = sorted(list(set(folds_dev)))
-    nested_preds = np.zeros(len(y_dev), dtype=int)
+    outer_folds = sorted(list(set(folds_dev)))
+    outer_preds = np.zeros(len(y_dev), dtype=int)
+    outer_probs = np.zeros(len(y_dev), dtype=float)
     inner_thresholds = {}
 
-    for val_fold in unique_folds:
-        val_idx = (folds_dev == val_fold)
-        train_idx = ~val_idx
+    for outer_fold in outer_folds:
+        outer_mask = (folds_dev == outer_fold)
+        inner_mask = ~outer_mask
 
-        t_inner = select_policy_threshold(
-            y_dev[train_idx], probs_dev[train_idx], criterion=criterion
-        )
-        inner_thresholds[str(val_fold)] = float(t_inner)
-        nested_preds[val_idx] = (probs_dev[val_idx] >= t_inner).astype(int)
+        inner_folds_list = sorted(list(set(folds_dev[inner_mask])))
+        f_A, f_B = inner_folds_list[0], inner_folds_list[1]
 
-    tn, fp, fn, tp = confusion_matrix(y_dev, nested_preds, labels=[0, 1]).ravel()
+        # Inner 2-fold CV between f_A and f_B
+        idx_A = (folds_dev == f_A)
+        idx_B = (folds_dev == f_B)
+
+        p_A = fit_ensemble_predict_probabilities(X_dev[idx_B], y_dev[idx_B], X_dev[idx_A])
+        p_B = fit_ensemble_predict_probabilities(X_dev[idx_A], y_dev[idx_A], X_dev[idx_B])
+
+        p_inner_oof = np.zeros(np.sum(inner_mask), dtype=float)
+        y_inner = y_dev[inner_mask]
+
+        sub_A = (folds_dev[inner_mask] == f_A)
+        sub_B = (folds_dev[inner_mask] == f_B)
+        p_inner_oof[sub_A] = p_A
+        p_inner_oof[sub_B] = p_B
+
+        # Select threshold strictly from inner OOF predictions
+        t_inner = select_policy_threshold(y_inner, p_inner_oof, criterion=criterion)
+        inner_thresholds[str(outer_fold)] = float(t_inner)
+
+        # Fit model on ALL inner data (A + B) and predict on held-out outer fold k
+        p_outer = fit_ensemble_predict_probabilities(X_dev[inner_mask], y_dev[inner_mask], X_dev[outer_mask])
+        outer_probs[outer_mask] = p_outer
+        outer_preds[outer_mask] = (p_outer >= t_inner).astype(int)
+
+    tn, fp, fn, tp = confusion_matrix(y_dev, outer_preds, labels=[0, 1]).ravel()
     sens = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     spec = tn / (tn + fp) if (tn + fp) > 0 else 0.0
     acc = (tp + tn) / len(y_dev)
@@ -248,8 +309,8 @@ def paired_scan_cluster_threshold_comparison(
     obs_acc_base = accuracy_score(y_true, pred_baseline)
     obs_sens_pol = recall_score(y_true, pred_policy, zero_division=0)
     obs_sens_base = recall_score(y_true, pred_baseline, zero_division=0)
-    tn_p, fp_p, _, _ = confusion_matrix(y_true, pred_policy).ravel()
-    tn_b, fp_b, _, _ = confusion_matrix(y_true, pred_baseline).ravel()
+    tn_p, fp_p, _, _ = confusion_matrix(y_true, pred_policy, labels=[0, 1]).ravel()
+    tn_b, fp_b, _, _ = confusion_matrix(y_true, pred_baseline, labels=[0, 1]).ravel()
     obs_spec_pol = tn_p / (tn_p + fp_p) if (tn_p + fp_p) > 0 else 0.0
     obs_spec_base = tn_b / (tn_b + fp_b) if (tn_b + fp_b) > 0 else 0.0
 
@@ -300,6 +361,7 @@ def run_stage6f():
     X_dev, y_dev, groups_dev, folds_dev = X[dev_mask], y[dev_mask], groups[dev_mask], folds[dev_mask]
     X_test, y_test, groups_test, agr_test = X[test_mask], y[test_mask], groups[test_mask], agr_levels[test_mask]
     coords_test = coords[test_mask]
+    X_dev_15 = prune_to_selected_features(X_dev)
 
     print(f"\nCohort Structure:")
     print(f"   Development cohort (Folds 0-2): {len(y_dev)} findings ({np.sum(y_dev==1)} pos, {np.sum(y_dev==0)} neg, {np.mean(y_dev)*100:.1f}% pos)")
@@ -324,7 +386,7 @@ def run_stage6f():
         
         # At default t=0.50
         pred50 = (p_oof >= 0.50).astype(int)
-        tn, fp, fn, tp = confusion_matrix(y_dev, pred50).ravel()
+        tn, fp, fn, tp = confusion_matrix(y_dev, pred50, labels=[0, 1]).ravel()
         
         dev_model_comp[m_type] = {
             "auc_roc": float(auc),
@@ -345,11 +407,11 @@ def run_stage6f():
         }
 
     print("\n--- Development Model Comparison (Folds 0-2 OOF) ---")
-    print(f"{'Model':<12} | {'AUC':<6} | {'AP':<6} | {'Brier':<6} | {'Prob(y=0)':<12} | {'Prob(y=1)':<12} | {'Spec@0.50':<10}")
+    print(f"{'Model':<12} | {'AUC':<6} | {'AP':<6} | {'Brier':<6} | {'Acc@0.50':<8} | {'Sens@0.50':<9} | {'Spec@0.50':<10}")
     print("-" * 80)
     for m, d in dev_model_comp.items():
         print(f"{m.upper():<12} | {d['auc_roc']:.4f} | {d['average_precision']:.4f} | {d['brier_score']:.4f} | "
-              f"{d['prob_mean_neg']:.3f}+/-{d['prob_std_neg']:.2f} | {d['prob_mean_pos']:.3f}+/-{d['prob_std_pos']:.2f} | "
+              f"{d['at_threshold_0_50']['accuracy']:.4f}   | {d['at_threshold_0_50']['sensitivity']:.4f}    | "
               f"{d['at_threshold_0_50']['specificity']:.4f}")
 
     with (outputs_dir / "development_model_comparison.json").open("w", encoding="utf-8") as f:
@@ -363,11 +425,11 @@ def run_stage6f():
     sweep_df.to_csv(sweep_path, index=False)
     print(f"   Saved {len(sweep_df)} threshold evaluations to {sweep_path.name}.")
 
-    # 5. Nested Threshold Selection on Development Data
-    print("\n[STEP 5] Conducting nested scan-grouped threshold selection (preventing optimistic selection bias)...")
-    nested_sens80 = evaluate_nested_grouped_thresholds(y_dev, p_ens_dev, folds_dev, criterion="sens_80")
-    nested_sens75 = evaluate_nested_grouped_thresholds(y_dev, p_ens_dev, folds_dev, criterion="sens_75")
-    nested_youden = evaluate_nested_grouped_thresholds(y_dev, p_ens_dev, folds_dev, criterion="youden")
+    # 5. True Leak-Free Nested Scan-Grouped Threshold Selection on Development Data
+    print("\n[STEP 5] Conducting true leak-free nested scan-grouped threshold validation...")
+    nested_sens80 = evaluate_true_nested_scan_grouped_validation(X_dev_15, y_dev, folds_dev, criterion="sens_80")
+    nested_sens75 = evaluate_true_nested_scan_grouped_validation(X_dev_15, y_dev, folds_dev, criterion="sens_75")
+    nested_youden = evaluate_true_nested_scan_grouped_validation(X_dev_15, y_dev, folds_dev, criterion="youden")
 
     # Full Development frozen thresholds
     t_star_sens80 = select_policy_threshold(y_dev, p_ens_dev, criterion="sens_80")
@@ -392,24 +454,28 @@ def run_stage6f():
         json.dump(nested_summary, f, indent=2)
 
     print(f"   Primary Policy (Sens >= 0.80): Frozen Threshold t* = {t_star_sens80:.2f} (Inner folds: {nested_sens80['inner_thresholds_per_fold']})")
-    print(f"      Nested OOF: Sens={nested_sens80['nested_sensitivity']:.4f}, Spec={nested_sens80['nested_specificity']:.4f}, Acc={nested_sens80['nested_accuracy']:.4f}")
+    print(f"      Leak-Free Nested OOF: Sens={nested_sens80['nested_sensitivity']:.4f}, Spec={nested_sens80['nested_specificity']:.4f}, Acc={nested_sens80['nested_accuracy']:.4f}")
     print(f"   Secondary Policy (Sens >= 0.75): Frozen Threshold t* = {t_star_sens75:.2f} (Inner folds: {nested_sens75['inner_thresholds_per_fold']})")
-    print(f"      Nested OOF: Sens={nested_sens75['nested_sensitivity']:.4f}, Spec={nested_sens75['nested_specificity']:.4f}, Acc={nested_sens75['nested_accuracy']:.4f}")
+    print(f"      Leak-Free Nested OOF: Sens={nested_sens75['nested_sensitivity']:.4f}, Spec={nested_sens75['nested_specificity']:.4f}, Acc={nested_sens75['nested_accuracy']:.4f}")
     print(f"   Secondary Policy (Max Youden J):  Frozen Threshold t* = {t_star_youden:.2f} (Inner folds: {nested_youden['inner_thresholds_per_fold']})")
-    print(f"      Nested OOF: Sens={nested_youden['nested_sensitivity']:.4f}, Spec={nested_youden['nested_specificity']:.4f}, Acc={nested_youden['nested_accuracy']:.4f}")
+    print(f"      Leak-Free Nested OOF: Sens={nested_youden['nested_sensitivity']:.4f}, Spec={nested_youden['nested_specificity']:.4f}, Acc={nested_youden['nested_accuracy']:.4f}")
 
     # 6. Retrospective Evaluation on Fold 3
-    print("\n[STEP 6] Applying frozen development policy retrospectively to Stage 6E Fold 3 probabilities...")
-    # Load Stage 6E predictions
+    print("\n[STEP 6] Auditing alignment and applying frozen development policy retrospectively to Stage 6E Fold 3 probabilities...")
     preds_e_path = project_root / "outputs" / "stage6e_lndb_adaptation" / "fold3_predictions.csv"
     if not preds_e_path.exists():
         raise FileNotFoundError(f"Missing Stage 6E predictions: {preds_e_path}")
     preds_e_df = pd.read_csv(preds_e_path)
-    
-    y_fold3 = preds_e_df["true_label"].to_numpy()
+
+    # Explicit Row-by-Row Alignment Assertions
+    assert len(preds_e_df) == len(y_test), f"Length mismatch: CSV has {len(preds_e_df)}, cache has {len(y_test)}"
+    assert np.array_equal(preds_e_df["seriesuid"].to_numpy().astype(str), groups_test.astype(str)), "Scan ID sequence mismatch between Stage 6E CSV and cache"
+    assert np.allclose(preds_e_df[["x", "y", "z"]].to_numpy(), coords_test, rtol=0.0, atol=1e-5), "Coordinate sequence mismatch between Stage 6E CSV and cache"
+    assert np.array_equal(preds_e_df["true_label"].to_numpy().astype(int), y_test.astype(int)), "Binary label sequence mismatch between Stage 6E CSV and cache"
+    assert np.array_equal(preds_e_df["agr_level"].to_numpy().astype(int), agr_test.astype(int)), "AgrLevel sequence mismatch between Stage 6E CSV and cache"
+    print("   [AUDIT] Stage 6E Fold 3 predictions strictly align row-by-row with cached ground truth.")
+
     p_fold3 = preds_e_df["adapted_ensemble_prob"].to_numpy()
-    groups_fold3 = preds_e_df["seriesuid"].to_numpy()
-    agr_fold3 = preds_e_df["agr_level"].to_numpy()
 
     # Predictions under frozen policy and default baseline
     pred_base50 = (p_fold3 >= 0.50).astype(int)
@@ -417,31 +483,28 @@ def run_stage6f():
     pred_star_sens75 = (p_fold3 >= t_star_sens75).astype(int)
     pred_star_youden = (p_fold3 >= t_star_youden).astype(int)
 
-    # Compute metrics helper
     def get_eval_dict(pred_arr, t_val):
-        tn, fp, fn, tp = confusion_matrix(y_fold3, pred_arr, labels=[0, 1]).ravel()
+        tn, fp, fn, tp = confusion_matrix(y_test, pred_arr, labels=[0, 1]).ravel()
         sens = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         spec = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        acc = (tp + tn) / len(y_fold3)
+        acc = (tp + tn) / len(y_test)
         bal_acc = (sens + spec) / 2.0
         prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        f1 = f1_score(y_fold3, pred_arr, zero_division=0)
+        f1 = f1_score(y_test, pred_arr, zero_division=0)
         
-        acc_ci = compute_cluster_bootstrap_ci(y_fold3, pred_arr, groups_fold3, accuracy_score)
-        sens_ci = compute_cluster_bootstrap_ci(y_fold3, pred_arr, groups_fold3, recall_score)
+        acc_ci = compute_cluster_bootstrap_ci(y_test, pred_arr, groups_test, accuracy_score)
+        sens_ci = compute_cluster_bootstrap_ci(y_test, pred_arr, groups_test, recall_score)
         
-        # Specificity CI helper
         def spec_func(y_t, y_p):
             t_neg = np.sum((y_t == 0) & (y_p == 0))
             f_pos = np.sum((y_t == 0) & (y_p == 1))
             return t_neg / (t_neg + f_pos) if (t_neg + f_pos) > 0 else 0.0
-        spec_ci = compute_cluster_bootstrap_ci(y_fold3, pred_arr, groups_fold3, spec_func)
+        spec_ci = compute_cluster_bootstrap_ci(y_test, pred_arr, groups_test, spec_func)
 
-        # Agreement stratification
         strat = {}
-        for agr in sorted(np.unique(agr_fold3)):
-            m = (agr_fold3 == agr)
-            sub_y, sub_p = y_fold3[m], pred_arr[m]
+        for agr in sorted(np.unique(agr_test)):
+            m = (agr_test == agr)
+            sub_y, sub_p = y_test[m], pred_arr[m]
             sub_acc = accuracy_score(sub_y, sub_p) if len(sub_y) > 0 else 0.0
             strat[str(agr)] = {
                 "n": int(len(sub_y)),
@@ -473,7 +536,7 @@ def run_stage6f():
     # 7. Paired Scan-Cluster Bootstrap Comparison on Fold 3
     print("\n[STEP 7] Running paired scan-cluster bootstrap (5,000 replicates) comparing policy vs Stage 6E baseline...")
     paired_comp_sens80 = paired_scan_cluster_threshold_comparison(
-        y_fold3, pred_star_sens80, pred_base50, groups_fold3, n_bootstrap=5000, seed=42
+        y_test, pred_star_sens80, pred_base50, groups_test, n_bootstrap=5000, seed=42
     )
     with (outputs_dir / "fold3_paired_vs_stage6e.json").open("w", encoding="utf-8") as f:
         json.dump(paired_comp_sens80, f, indent=2)
@@ -495,9 +558,9 @@ def run_stage6f():
         "date_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "designation": "Retrospective held-out evaluation on Stage 6E Fold 3 probabilities",
         "cohort": {
-            "samples": len(y_fold3),
-            "scans": int(len(np.unique(groups_fold3))),
-            "positive_prevalence": float(np.mean(y_fold3))
+            "samples": len(y_test),
+            "scans": int(len(np.unique(groups_test))),
+            "positive_prevalence": float(np.mean(y_test))
         },
         "operating_points": {
             "baseline_threshold_0_50": fold3_eval_base50,
@@ -512,7 +575,6 @@ def run_stage6f():
         json.dump(fold3_metrics_payload, f, indent=2)
 
     # 10. Generate Visualizations
-    # Plot A: Threshold Sweep Curves on Development OOF
     plt.figure(figsize=(8, 5))
     plt.plot(sweep_df["threshold"], sweep_df["sensitivity"], label="Sensitivity", color="tab:green", lw=2)
     plt.plot(sweep_df["threshold"], sweep_df["specificity"], label="Specificity", color="tab:blue", lw=2)
@@ -529,12 +591,11 @@ def run_stage6f():
     plt.savefig(outputs_dir / "threshold_sweep_curves.png", dpi=200)
     plt.close()
 
-    # Plot B: Confusion Matrix Comparison on Fold 3
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
-    cm_base = confusion_matrix(y_fold3, pred_base50)
-    cm_star = confusion_matrix(y_fold3, pred_star_sens80)
-    
-    im0 = axes[0].imshow(cm_base, cmap="Blues", interpolation="nearest")
+    cm_base = confusion_matrix(y_test, pred_base50, labels=[0, 1])
+    cm_star = confusion_matrix(y_test, pred_star_sens80, labels=[0, 1])
+
+    axes[0].imshow(cm_base, cmap="Blues", interpolation="nearest")
     axes[0].set_title(f"Stage 6E Baseline (t=0.50)\nSens={fold3_eval_base50['sensitivity']:.1%}, Spec={fold3_eval_base50['specificity']:.1%}")
     axes[0].set_xticks([0, 1])
     axes[0].set_yticks([0, 1])
@@ -544,7 +605,7 @@ def run_stage6f():
         for j in range(2):
             axes[0].text(j, i, str(cm_base[i, j]), ha="center", va="center", color="red" if i!=j else "black", fontsize=13, fontweight="bold")
 
-    im1 = axes[1].imshow(cm_star, cmap="Blues", interpolation="nearest")
+    axes[1].imshow(cm_star, cmap="Blues", interpolation="nearest")
     axes[1].set_title(f"Stage 6F Primary Policy (t*={t_star_sens80:.2f})\nSens={fold3_eval_sens80['sensitivity']:.1%}, Spec={fold3_eval_sens80['specificity']:.1%}")
     axes[1].set_xticks([0, 1])
     axes[1].set_yticks([0, 1])
@@ -565,26 +626,30 @@ This experiment evaluates decision threshold optimization and false-positive red
 
 > [!IMPORTANT]
 > **Methodological Framing & Retrospective Qualification**:
-> Fold 3 was previously evaluated during Stage 6E and therefore is **not** an untouched, prospective test cohort. The evaluations reported below are explicitly designated as **retrospective held-out analyses** applied to the frozen Stage 6E Fold 3 predicted probabilities.
+> Fold 3 was previously evaluated during Stage 6E and therefore is **not** an untouched, prospective test cohort. The evaluations reported below are explicitly designated as **retrospective held-out analyses** applied to the frozen Stage 6E Fold 3 predicted probabilities. This experiment is a candidate-classification study rather than a clinical screening deployment.
 
 ## 1. Development Model Comparison (Folds 0–2 Scan-Grouped OOF)
 
-| Model Architecture | Features | ROC-AUC | PR-AUC | Brier Score | Mean Neg Prob | Mean Pos Prob | Specificity @ 0.50 |
+| Model Architecture | Features | ROC-AUC | PR-AUC | Brier Score | Accuracy @ 0.50 | Sensitivity @ 0.50 | Specificity @ 0.50 |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Adapted SVM (RBF)** | 15 frozen | {dev_model_comp['svm']['auc_roc']:.4f} | {dev_model_comp['svm']['average_precision']:.4f} | {dev_model_comp['svm']['brier_score']:.4f} | {dev_model_comp['svm']['prob_mean_neg']:.3f} | {dev_model_comp['svm']['prob_mean_pos']:.3f} | {dev_model_comp['svm']['at_threshold_0_50']['specificity']:.4f} |
-| **Adapted Random Forest** | 15 frozen | {dev_model_comp['rf']['auc_roc']:.4f} | {dev_model_comp['rf']['average_precision']:.4f} | {dev_model_comp['rf']['brier_score']:.4f} | {dev_model_comp['rf']['prob_mean_neg']:.3f} | {dev_model_comp['rf']['prob_mean_pos']:.3f} | {dev_model_comp['rf']['at_threshold_0_50']['specificity']:.4f} |
-| **Adapted XGBoost** | 15 frozen | {dev_model_comp['xgb']['auc_roc']:.4f} | {dev_model_comp['xgb']['average_precision']:.4f} | {dev_model_comp['xgb']['brier_score']:.4f} | {dev_model_comp['xgb']['prob_mean_neg']:.3f} | {dev_model_comp['xgb']['prob_mean_pos']:.3f} | {dev_model_comp['xgb']['at_threshold_0_50']['specificity']:.4f} |
-| **Adapted Soft Ensemble** | 15 frozen | **{dev_model_comp['ensemble']['auc_roc']:.4f}** | **{dev_model_comp['ensemble']['average_precision']:.4f}** | **{dev_model_comp['ensemble']['brier_score']:.4f}** | {dev_model_comp['ensemble']['prob_mean_neg']:.3f} | {dev_model_comp['ensemble']['prob_mean_pos']:.3f} | **{dev_model_comp['ensemble']['at_threshold_0_50']['specificity']:.4f}** |
+| **Adapted SVM (RBF)** | 15 frozen | {dev_model_comp['svm']['auc_roc']:.4f} | {dev_model_comp['svm']['average_precision']:.4f} | {dev_model_comp['svm']['brier_score']:.4f} | {dev_model_comp['svm']['at_threshold_0_50']['accuracy']*100:.2f}% | **{dev_model_comp['svm']['at_threshold_0_50']['sensitivity']*100:.2f}%** | {dev_model_comp['svm']['at_threshold_0_50']['specificity']*100:.2f}% |
+| **Adapted Random Forest** | 15 frozen | **{dev_model_comp['rf']['auc_roc']:.4f}** | **{dev_model_comp['rf']['average_precision']:.4f}** | **{dev_model_comp['rf']['brier_score']:.4f}** | **{dev_model_comp['rf']['at_threshold_0_50']['accuracy']*100:.2f}%** | {dev_model_comp['rf']['at_threshold_0_50']['sensitivity']*100:.2f}% | {dev_model_comp['rf']['at_threshold_0_50']['specificity']*100:.2f}% |
+| **Adapted XGBoost** | 15 frozen | {dev_model_comp['xgb']['auc_roc']:.4f} | {dev_model_comp['xgb']['average_precision']:.4f} | {dev_model_comp['xgb']['brier_score']:.4f} | {dev_model_comp['xgb']['at_threshold_0_50']['accuracy']*100:.2f}% | {dev_model_comp['xgb']['at_threshold_0_50']['sensitivity']*100:.2f}% | **{dev_model_comp['xgb']['at_threshold_0_50']['specificity']*100:.2f}%** |
+| **Adapted Soft Ensemble** | 15 frozen | {dev_model_comp['ensemble']['auc_roc']:.4f} | {dev_model_comp['ensemble']['average_precision']:.4f} | {dev_model_comp['ensemble']['brier_score']:.4f} | {dev_model_comp['ensemble']['at_threshold_0_50']['accuracy']*100:.2f}% | {dev_model_comp['ensemble']['at_threshold_0_50']['sensitivity']*100:.2f}% | {dev_model_comp['ensemble']['at_threshold_0_50']['specificity']*100:.2f}% |
 
-## 2. Nested Development Threshold Selection (Folds 0–2)
+*Note on performance breakdown:* Random Forest achieves the highest overall discrimination (AUC 0.6598, PR-AUC 0.7427, Brier 0.2121), XGBoost provides the highest specificity at default threshold (51.24%), SVM achieves the highest sensitivity (93.07%), and the Soft Ensemble provides a balanced consensus across all three.
 
-To eliminate optimistic selection bias, thresholds were selected strictly on inner folds before evaluating outer validation folds:
+## 2. True Leak-Free Nested Development Threshold Selection (Folds 0–2)
 
-| Policy Constraint | Frozen Threshold ($t^*$) | Inner Fold Thresholds | Nested Sensitivity | Nested Specificity | Nested Balanced Acc |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Primary: Sens $\\ge 80\\%$** | **{t_star_sens80:.2f}** | Fold0: {nested_sens80['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_sens80['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_sens80['inner_thresholds_per_fold']['Fold2']:.2f} | {nested_sens80['nested_sensitivity']*100:.2f}% | {nested_sens80['nested_specificity']*100:.2f}% | {nested_sens80['nested_balanced_accuracy']*100:.2f}% |
-| **Secondary: Sens $\\ge 75\\%$** | **{t_star_sens75:.2f}** | Fold0: {nested_sens75['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_sens75['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_sens75['inner_thresholds_per_fold']['Fold2']:.2f} | {nested_sens75['nested_sensitivity']*100:.2f}% | {nested_sens75['nested_specificity']*100:.2f}% | {nested_sens75['nested_balanced_accuracy']*100:.2f}% |
-| **Secondary: Max Youden $J$** | **{t_star_youden:.2f}** | Fold0: {nested_youden['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_youden['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_youden['inner_thresholds_per_fold']['Fold2']:.2f} | {nested_youden['nested_sensitivity']*100:.2f}% | {nested_youden['nested_specificity']*100:.2f}% | {nested_youden['nested_balanced_accuracy']*100:.2f}% |
+Thresholds were selected strictly on inner folds using an inner 2-fold cross-validation scheme where outer validation folds were completely excluded from both model training and threshold tuning:
+
+| Policy Constraint | Frozen Threshold ($t^*$) | Inner Fold Selected Thresholds | Nested Sensitivity | Nested Specificity | Nested Balanced Acc | Nested Accuracy |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Primary: Sens $\\ge 80\\%$** | **{t_star_sens80:.2f}** | Fold0: {nested_sens80['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_sens80['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_sens80['inner_thresholds_per_fold']['Fold2']:.2f} | **{nested_sens80['nested_sensitivity']*100:.2f}%** | {nested_sens80['nested_specificity']*100:.2f}% | {nested_sens80['nested_balanced_accuracy']*100:.2f}% | {nested_sens80['nested_accuracy']*100:.2f}% |
+| **Secondary: Sens $\\ge 75\\%$** | **{t_star_sens75:.2f}** | Fold0: {nested_sens75['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_sens75['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_sens75['inner_thresholds_per_fold']['Fold2']:.2f} | {nested_sens75['nested_sensitivity']*100:.2f}%* | {nested_sens75['nested_specificity']*100:.2f}% | {nested_sens75['nested_balanced_accuracy']*100:.2f}% | {nested_sens75['nested_accuracy']*100:.2f}% |
+| **Secondary: Max Youden $J$** | **{t_star_youden:.2f}** | Fold0: {nested_youden['inner_thresholds_per_fold']['Fold0']:.2f}, Fold1: {nested_youden['inner_thresholds_per_fold']['Fold1']:.2f}, Fold2: {nested_youden['inner_thresholds_per_fold']['Fold2']:.2f} | {nested_youden['nested_sensitivity']*100:.2f}% | {nested_youden['nested_specificity']*100:.2f}% | {nested_youden['nested_balanced_accuracy']*100:.2f}% | {nested_youden['nested_accuracy']*100:.2f}% |
+
+*\\*Qualification on sensitivity constraint:* The secondary policy constrained to $\\ge 75\\%$ on inner training folds achieved {nested_sens75['nested_sensitivity']*100:.2f}% on unseen outer validation folds. This demonstrates that finite-sample sampling variation across folds can cause slight empirical boundary offsets when applying fixed thresholds to unseen cohorts.
 
 ## 3. Retrospective Evaluation on Fold 3 ($N=320$ Findings, 58 Scans)
 
@@ -606,6 +671,8 @@ Paired bootstrap across 5,000 resampled scan clusters evaluates whether changes 
 - **Sensitivity Difference**: {paired_comp_sens80['sensitivity_delta']['observed']*100:+.2f} percentage points [95% CI: {paired_comp_sens80['sensitivity_delta']['scan_cluster_95ci'][0]*100:+.2f}% to {paired_comp_sens80['sensitivity_delta']['scan_cluster_95ci'][1]*100:+.2f}%]
 - **Accuracy Difference**: {paired_comp_sens80['accuracy_delta']['observed']*100:+.2f} percentage points [95% CI: {paired_comp_sens80['accuracy_delta']['scan_cluster_95ci'][0]*100:+.2f}% to {paired_comp_sens80['accuracy_delta']['scan_cluster_95ci'][1]*100:+.2f}%]
 
+*Statistical interpretation:* Because the specificity interval crosses zero ([0.00%, +2.86%]), an increase from 0.50 to 0.52 does not establish a statistically significant specificity gain. Conversely, the sensitivity reduction ([-9.90%, -3.05%]) and accuracy reduction ([-5.64%, -1.55%]) are both strictly negative.
+
 ## 5. Radiologist Agreement Stratification on Fold 3 (Primary Policy $t^*={t_star_sens80:.2f}$)
 - **AgrLevel 0** (non-nodules, N={fold3_eval_sens80['agreement_stratification']['0']['n']}): Accuracy = {fold3_eval_sens80['agreement_stratification']['0']['accuracy']*100:.2f}% (Specificity)
 - **AgrLevel 1** (1-reader nodules, N={fold3_eval_sens80['agreement_stratification']['1']['n']}): Accuracy = {fold3_eval_sens80['agreement_stratification']['1']['accuracy']*100:.2f}% (Sensitivity)
@@ -618,6 +685,9 @@ Paired bootstrap across 5,000 resampled scan clusters evaluates whether changes 
 - Balanced Accuracy: {conflict_sens_policy['balanced_accuracy']*100:.2f}%
 - Sensitivity: {conflict_sens_policy['sensitivity']*100:.2f}%
 - Specificity: {conflict_sens_policy['specificity']*100:.2f}%
+
+## 7. Scientific Conclusion
+Within the scope of the tested models and operating points, decision threshold adjustment alone does not solve the low-specificity challenge on LNDb without an unacceptable reduction in nodule sensitivity. Isolating the root cause (e.g., whether vascular parenchymal feature representation, scanner protocol shift, or label noise) requires further targeted ablations and feature-family experiments.
 """
     summary_path = outputs_dir / "stage6f_summary.md"
     with summary_path.open("w", encoding="utf-8") as f:

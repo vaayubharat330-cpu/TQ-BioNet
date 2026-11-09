@@ -66,10 +66,25 @@ class TestSyntheticPatchStressSuite(unittest.TestCase):
         
         # 4. Determinism on repeated run
         fd2, fv2 = extract_tq_bio_features(norm_patch)
-        # ARPACK Lanczos solver has numerical tolerance of 1e-7 across repeated calls without explicit v0
+        # 4. Determinism on repeated run:
+        # Features 0..28 (topological, Hessian, lacunarity, and quantum eigenvalues 0..8)
+        # and feature 30 (vesselness ratio) are strictly deterministic to machine precision (rtol=1e-5, atol=1e-6).
         np.testing.assert_allclose(
-            fv1, fv2, rtol=5e-3, atol=1e-5,
-            err_msg=f"[{case_name}] Extraction must be deterministic across repeated calls"
+            fv1[:29], fv2[:29], rtol=1e-5, atol=1e-6,
+            err_msg=f"[{case_name}] Features 0-28 must be deterministic across repeated calls"
+        )
+        np.testing.assert_allclose(
+            fv1[30:], fv2[30:], rtol=1e-5, atol=1e-6,
+            err_msg=f"[{case_name}] Feature 30 must be deterministic across repeated calls"
+        )
+        # Feature 29 (quantum_eigenvalue_9): on degenerate constant patches (e.g. uniform air),
+        # ARPACK's unseeded Lanczos solver at truncation rank k=10 can project onto adjacent
+        # degenerate energy states, introducing variation strictly bounded to <0.2% (observed: 0.126%).
+        # On all non-degenerate patches, it satisfies rtol=1e-5.
+        deg_tol = 2e-3 if case_name == "uniform_air" else 1e-5
+        np.testing.assert_allclose(
+            fv1[29], fv2[29], rtol=deg_tol, atol=1e-5,
+            err_msg=f"[{case_name}] quantum_eigenvalue_9 determinism exceeds documented ARPACK Lanczos boundary tolerance"
         )
         return fd1, fv1
 

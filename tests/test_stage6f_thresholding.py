@@ -7,7 +7,7 @@ import pytest
 from stage6f_specificity_optimization import (
     sweep_thresholds,
     select_policy_threshold,
-    evaluate_nested_grouped_thresholds,
+    evaluate_true_nested_scan_grouped_validation,
     paired_scan_cluster_threshold_comparison
 )
 
@@ -53,28 +53,28 @@ def test_select_policy_threshold_youden():
     assert (sens + spec - 1.0) == pytest.approx(1.0)
 
 
-def test_nested_grouped_thresholds_no_outer_leakage():
-    # Construct 3 folds with different distribution patterns
-    y_dev = np.array([
-        1, 1, 0, 0,   # Fold0
-        1, 1, 0, 0,   # Fold1
-        1, 1, 0, 0    # Fold2
-    ])
-    probs_dev = np.array([
-        0.8, 0.7, 0.3, 0.2,
-        0.85, 0.75, 0.25, 0.15,
-        0.9, 0.65, 0.35, 0.1
-    ])
-    folds_dev = np.array([
-        "Fold0", "Fold0", "Fold0", "Fold0",
-        "Fold1", "Fold1", "Fold1", "Fold1",
-        "Fold2", "Fold2", "Fold2", "Fold2"
-    ])
+def test_true_nested_scan_grouped_validation_leak_free():
+    # Construct 3 folds of synthetic 15-feature data
+    np.random.seed(42)
+    n_per_fold = 20
+    X_f0 = np.random.randn(n_per_fold, 15)
+    X_f1 = np.random.randn(n_per_fold, 15)
+    X_f2 = np.random.randn(n_per_fold, 15)
+    
+    # Make feature 0 strongly predictive
+    y_f0 = (X_f0[:, 0] > 0).astype(int)
+    y_f1 = (X_f1[:, 0] > 0).astype(int)
+    y_f2 = (X_f2[:, 0] > 0).astype(int)
 
-    res = evaluate_nested_grouped_thresholds(y_dev, probs_dev, folds_dev, criterion="sens_80")
+    X_dev = np.vstack([X_f0, X_f1, X_f2])
+    y_dev = np.concatenate([y_f0, y_f1, y_f2])
+    folds_dev = np.array(["Fold0"] * n_per_fold + ["Fold1"] * n_per_fold + ["Fold2"] * n_per_fold)
+
+    res = evaluate_true_nested_scan_grouped_validation(X_dev, y_dev, folds_dev, criterion="sens_80")
     assert "inner_thresholds_per_fold" in res
     assert len(res["inner_thresholds_per_fold"]) == 3
-    assert res["nested_sensitivity"] >= 0.80 - 1e-5
+    assert 0.0 <= res["nested_sensitivity"] <= 1.0
+    assert 0.0 <= res["nested_specificity"] <= 1.0
     assert res["nested_accuracy"] > 0.5
 
 
