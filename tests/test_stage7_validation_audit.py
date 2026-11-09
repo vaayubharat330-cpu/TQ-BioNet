@@ -223,6 +223,29 @@ def test_wilson_confidence_intervals_match_json():
         np.testing.assert_allclose([prec_low, prec_high], s["precision_ci"], atol=1e-6)
 
 
+def test_scan_cluster_bootstrap_confidence_intervals_match_json():
+    """Recompute scan-cluster bootstrap intervals for Voting Ensemble and verify exact match with saved JSON."""
+    preds_path = OUTPUTS_DIR / "validation_predictions.csv"
+    df = pd.read_csv(preds_path)
+    y_true = df["true_label"].values
+    groups = df["seriesuid"].values
+    y_prob = df["ensemble_prob"].values
+    y_pred = df["predicted_label"].values
+
+    with open(OUTPUTS_DIR / "validation_metrics.json") as f:
+        saved = json.load(f)
+
+    ens_saved = saved["VotingEnsemble"]
+
+    acc_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, accuracy_score, num_resamples=1000, random_seed=42)
+    f1_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, f1_score, num_resamples=1000, random_seed=42)
+    auc_ci = compute_cluster_bootstrap_ci(y_true, y_prob, groups, roc_auc_score, num_resamples=1000, random_seed=42)
+
+    np.testing.assert_allclose(acc_ci, ens_saved["accuracy_ci"], atol=1e-6)
+    np.testing.assert_allclose(f1_ci, ens_saved["f1_ci"], atol=1e-6)
+    np.testing.assert_allclose(auc_ci, ens_saved["auc_ci"], atol=1e-6)
+
+
 def test_per_subset_metrics_reproducibility():
     """Verify that each subset-specific JSON metric file matches recomputation from predictions CSV."""
     df = pd.read_csv(OUTPUTS_DIR / "validation_predictions.csv")
