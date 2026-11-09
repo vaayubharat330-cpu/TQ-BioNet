@@ -1,0 +1,1128 @@
+{
+  "analysis": "Stage 8: Distribution Shift Audit",
+  "cohorts": {
+    "luna_dev": {
+      "n": 1446,
+      "pos": 723,
+      "neg": 723
+    },
+    "luna_val": {
+      "n": 926,
+      "pos": 463,
+      "neg": 463
+    },
+    "lndb_dev_folds0_2": {
+      "n": 899,
+      "pos": 577,
+      "neg": 322
+    }
+  },
+  "indomain_luna_shift": [
+    {
+      "norm_wasserstein": 0.05652113440152443,
+      "raw_wasserstein": 0.06022330570499698,
+      "ks_statistic": 0.04376114641119167,
+      "ks_pvalue": 0.22147650972382682,
+      "cohen_d": 0.027620015352941504,
+      "psi": 0.02423212614008597,
+      "ref_mean": 4.612311340693176,
+      "tgt_mean": 4.6417404851325,
+      "ref_median": 4.654592979195748,
+      "tgt_median": 4.7242055097077955,
+      "ref_std": 1.065500654625444,
+      "tgt_std": 1.0591560489510825,
+      "ref_iqr": 1.7723117315090002,
+      "tgt_iqr": 1.6564974847378209,
+      "feature": "H0_entropy",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.055194182349147754,
+      "raw_wasserstein": 0.000962355779106321,
+      "ks_statistic": 0.04750424945257491,
+      "ks_pvalue": 0.150243253411847,
+      "cohen_d": 0.048330416399884175,
+      "psi": 0.02407749541689899,
+      "ref_mean": 0.01577528183165297,
+      "tgt_mean": 0.01661796222928661,
+      "ref_median": 0.00839310942293272,
+      "tgt_median": 0.009131339652706148,
+      "ref_std": 0.017435819105329688,
+      "tgt_std": 0.017767671714723772,
+      "ref_iqr": 0.0201765909760647,
+      "tgt_iqr": 0.02261991798403652,
+      "feature": "hessian_L1",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.0531551383453973,
+      "raw_wasserstein": 0.012044703910256006,
+      "ks_statistic": 0.03821968101473044,
+      "ks_pvalue": 0.36979265442788434,
+      "cohen_d": 0.051784493368738645,
+      "psi": 0.007952435135573149,
+      "ref_mean": 0.36016521520918315,
+      "tgt_mean": 0.37189933742548026,
+      "ref_median": 0.3369203134235813,
+      "tgt_median": 0.34694470238341063,
+      "ref_std": 0.22659528853053879,
+      "tgt_std": 0.2327934464399463,
+      "ref_iqr": 0.36436713318802255,
+      "tgt_iqr": 0.38169038386286347,
+      "feature": "blobness_ratio",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.049021449367961344,
+      "raw_wasserstein": 6.64725327571352,
+      "ks_statistic": 0.0395774147196855,
+      "ks_pvalue": 0.3284728689936931,
+      "cohen_d": 0.012693464969847672,
+      "psi": 0.02255331095800924,
+      "ref_mean": 165.15602967872658,
+      "tgt_mean": 166.8772492201488,
+      "ref_median": 109.3452079296112,
+      "tgt_median": 119.0249376296997,
+      "ref_std": 135.5988727672733,
+      "tgt_std": 131.01179143966849,
+      "ref_iqr": 220.71922361850739,
+      "tgt_iqr": 204.75,
+      "feature": "H0_total_persistence",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.048521905594794926,
+      "raw_wasserstein": 0.010280620206330988,
+      "ks_statistic": 0.031254761029905986,
+      "ks_pvalue": 0.6247991817428508,
+      "cohen_d": -0.03968215445459842,
+      "psi": 0.03142723824974869,
+      "ref_mean": 0.6422334167690685,
+      "tgt_mean": 0.6338257263884901,
+      "ref_median": 0.6895701303809714,
+      "tgt_median": 0.6828372079506109,
+      "ref_std": 0.21187585442715626,
+      "tgt_std": 0.21572247076372297,
+      "ref_iqr": 0.3034251244020765,
+      "tgt_iqr": 0.285558318684746,
+      "feature": "vesselness_ratio",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.045993090969159184,
+      "raw_wasserstein": 9.661991522006039,
+      "ks_statistic": 0.047920979599640326,
+      "ks_pvalue": 0.14360381388072854,
+      "cohen_d": 0.006164854164645135,
+      "psi": 0.020691461001849838,
+      "ref_mean": 207.84854771784234,
+      "tgt_mean": 209.14362850971924,
+      "ref_median": 110.0,
+      "tgt_median": 123.0,
+      "ref_std": 210.07484642606252,
+      "tgt_std": 202.85150783383992,
+      "ref_iqr": 334.25,
+      "tgt_iqr": 303.5,
+      "feature": "H1_count",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.04594725547807401,
+      "raw_wasserstein": 3.998721541904002,
+      "ks_statistic": 0.04861254253186716,
+      "ks_pvalue": 0.13310607069540578,
+      "cohen_d": 0.0061817901436901366,
+      "psi": 0.02106650924684132,
+      "ref_mean": 86.05007071720944,
+      "tgt_mean": 86.58806275085549,
+      "ref_median": 45.56348919868469,
+      "tgt_median": 50.53405165672302,
+      "ref_std": 87.0285178145665,
+      "tgt_std": 84.03830615673927,
+      "ref_iqr": 138.45087513327599,
+      "tgt_iqr": 125.71380883455276,
+      "feature": "H1_total_persistence",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.0374908705506496,
+      "raw_wasserstein": 0.0172260550038056,
+      "ks_statistic": 0.026926144663613632,
+      "ks_pvalue": 0.7942656641995808,
+      "cohen_d": 0.025405445961896655,
+      "psi": 0.007655170280793421,
+      "ref_mean": 1.6593568892933965,
+      "tgt_mean": 1.6710300140597207,
+      "ref_median": 1.7029845653687887,
+      "tgt_median": 1.7229884701161309,
+      "ref_std": 0.4594733264604635,
+      "tgt_std": 0.46024803750723026,
+      "ref_iqr": 0.6811111727920354,
+      "tgt_iqr": 0.7004555676911544,
+      "feature": "fractal_dimension",
+      "family": "Fractal Complexity"
+    },
+    {
+      "norm_wasserstein": 0.036348088912148274,
+      "raw_wasserstein": 0.0009616985545670079,
+      "ks_statistic": 0.030967978993215812,
+      "ks_pvalue": 0.6362811050822775,
+      "cohen_d": 0.007295829039398694,
+      "psi": 0.016707161551537,
+      "ref_mean": 0.033473969803044276,
+      "tgt_mean": 0.03366700301198453,
+      "ref_median": 0.025240693537447907,
+      "tgt_median": 0.025968571557561413,
+      "ref_std": 0.02645802250818168,
+      "tgt_std": 0.02644136079699358,
+      "ref_iqr": 0.04531938647056298,
+      "tgt_iqr": 0.0459255664896986,
+      "feature": "hessian_L2",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.03549557028381452,
+      "raw_wasserstein": 0.0012751403120886604,
+      "ks_statistic": 0.02632121380497029,
+      "ks_pvalue": 0.8160685899385456,
+      "cohen_d": 0.0028272975089325475,
+      "psi": 0.01936349477704262,
+      "ref_mean": 0.050643420012596856,
+      "tgt_mean": 0.050744987644813534,
+      "ref_median": 0.040848512503345175,
+      "tgt_median": 0.042798972609192056,
+      "ref_std": 0.03592392802518534,
+      "tgt_std": 0.035607966297505955,
+      "ref_iqr": 0.06472151004745848,
+      "tgt_iqr": 0.06482810560543659,
+      "feature": "hessian_L3",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.03315859683641303,
+      "raw_wasserstein": 1.014946923392408,
+      "ks_statistic": 0.02805086796375792,
+      "ks_pvalue": 0.751891296255668,
+      "cohen_d": 0.024343664676670727,
+      "psi": 0.01805481466420848,
+      "ref_mean": -157.30735721341185,
+      "tgt_mean": -156.56222533435263,
+      "ref_median": -143.84579454662605,
+      "tgt_median": -141.84701788693303,
+      "ref_std": 30.608862262767605,
+      "tgt_std": 30.186260731661243,
+      "ref_iqr": 57.48243113450599,
+      "tgt_iqr": 56.164811082966025,
+      "feature": "quantum_eigenvalue_1",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.03294677030897949,
+      "raw_wasserstein": 1.0398513176966837,
+      "ks_statistic": 0.025295071829938252,
+      "ks_pvalue": 0.85105972937671,
+      "cohen_d": 0.02387557032084005,
+      "psi": 0.011912776510503547,
+      "ref_mean": -158.7338851083753,
+      "tgt_mean": -157.98033497201735,
+      "ref_median": -145.0868574413377,
+      "tgt_median": -143.28966316774398,
+      "ref_std": 31.5615554406338,
+      "tgt_std": 31.182783787941062,
+      "ref_iqr": 58.05041916895547,
+      "tgt_iqr": 57.49935556219668,
+      "feature": "quantum_eigenvalue_0",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.03291301412244712,
+      "raw_wasserstein": 0.1264334507607196,
+      "ks_statistic": 0.022657274554965065,
+      "ks_pvalue": 0.9257016004049848,
+      "cohen_d": 0.006345359487452701,
+      "psi": 0.017903911753311963,
+      "ref_mean": 5.443813639860038,
+      "tgt_mean": 5.4681889733779965,
+      "ref_median": 4.61564022185881,
+      "tgt_median": 4.538797843333092,
+      "ref_std": 3.8414424850409032,
+      "tgt_std": 3.821475729533592,
+      "ref_iqr": 4.220556166142282,
+      "tgt_iqr": 4.051148606731743,
+      "feature": "lacunarity_8",
+      "family": "Fractal Complexity"
+    },
+    {
+      "norm_wasserstein": 0.03195129207905934,
+      "raw_wasserstein": 0.9614606407981174,
+      "ks_statistic": 0.028343624626212476,
+      "ks_pvalue": 0.7405649363224848,
+      "cohen_d": 0.022941517750855667,
+      "psi": 0.017498777822845948,
+      "ref_mean": -156.48579774049256,
+      "tgt_mean": -155.79545425444383,
+      "ref_median": -143.37780827057992,
+      "tgt_median": -141.37299765590626,
+      "ref_std": 30.091447895725384,
+      "tgt_std": 29.706372003896504,
+      "ref_iqr": 57.048433329892816,
+      "tgt_iqr": 55.58120581693913,
+      "feature": "quantum_eigenvalue_2",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.024751520564406486,
+      "raw_wasserstein": 0.4262269189307985,
+      "ks_statistic": 0.028599039877639666,
+      "ks_pvalue": 0.730602667030996,
+      "cohen_d": -0.006192369150792621,
+      "psi": 0.010726931481515824,
+      "ref_mean": 17.89528174945936,
+      "tgt_mean": 17.7886477179397,
+      "ref_median": 13.070823711522904,
+      "tgt_median": 12.657184643458503,
+      "ref_std": 17.220231695329744,
+      "tgt_std": 17.146086033179472,
+      "ref_iqr": 11.837864018195228,
+      "tgt_iqr": 11.959495656793376,
+      "feature": "lacunarity_4",
+      "family": "Fractal Complexity"
+    }
+  ],
+  "cross_cohort_overall_shift": [
+    {
+      "norm_wasserstein": 0.4818946766696116,
+      "raw_wasserstein": 0.5134590934519878,
+      "ks_statistic": 0.1998763033153481,
+      "ks_pvalue": 7.352077539433261e-20,
+      "cohen_d": -0.4818946766696114,
+      "psi": 0.20666601447266647,
+      "ref_mean": 4.612311340693176,
+      "tgt_mean": 4.098852247241188,
+      "ref_median": 4.654592979195748,
+      "tgt_median": 4.022689237113329,
+      "ref_std": 1.065500654625444,
+      "tgt_std": 1.1909401625320135,
+      "ref_iqr": 1.7723117315090002,
+      "tgt_iqr": 1.6747910222692637,
+      "feature": "H0_entropy",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.366001786066419,
+      "raw_wasserstein": 0.009683683493780008,
+      "ks_statistic": 0.18260107665348158,
+      "ks_pvalue": 1.2413715290574654e-16,
+      "cohen_d": -0.3652110418121984,
+      "psi": 0.20587355078147668,
+      "ref_mean": 0.033473969803044276,
+      "tgt_mean": 0.02381120783854065,
+      "ref_median": 0.025240693537447907,
+      "tgt_median": 0.01441246491721052,
+      "ref_std": 0.02645802250818168,
+      "tgt_std": 0.021328763388766398,
+      "ref_iqr": 0.04531938647056298,
+      "tgt_iqr": 0.02961395861272722,
+      "feature": "hessian_L2",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.36567333109028477,
+      "raw_wasserstein": 0.013136422426817158,
+      "ks_statistic": 0.1703129495351374,
+      "ks_pvalue": 1.6123675676404867e-14,
+      "cohen_d": -0.3655153816451019,
+      "psi": 0.20079811056620048,
+      "ref_mean": 0.050643420012596856,
+      "tgt_mean": 0.037512671750280065,
+      "ref_median": 0.040848512503345175,
+      "tgt_median": 0.025372917792521356,
+      "ref_std": 0.03592392802518534,
+      "tgt_std": 0.029445587202052412,
+      "ref_iqr": 0.06472151004745848,
+      "tgt_iqr": 0.04035174931132401,
+      "feature": "hessian_L3",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.3469419088829418,
+      "raw_wasserstein": 47.04493176025295,
+      "ks_statistic": 0.19139446472721341,
+      "ks_pvalue": 3.0757022706953874e-18,
+      "cohen_d": -0.3469247770545726,
+      "psi": 0.19013609074414137,
+      "ref_mean": 165.15602967872658,
+      "tgt_mean": 118.11342097508894,
+      "ref_median": 109.3452079296112,
+      "tgt_median": 64.0,
+      "ref_std": 135.5988727672733,
+      "tgt_std": 121.0667700164383,
+      "ref_iqr": 220.71922361850739,
+      "tgt_iqr": 115.50793391466141,
+      "feature": "H0_total_persistence",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.3410556481191877,
+      "raw_wasserstein": 71.64721290137958,
+      "ks_statistic": 0.21199903996602956,
+      "ks_pvalue": 2.6520332066109623e-22,
+      "cohen_d": -0.34105564811918776,
+      "psi": 0.21260269657970501,
+      "ref_mean": 207.84854771784234,
+      "tgt_mean": 136.20133481646275,
+      "ref_median": 110.0,
+      "tgt_median": 46.0,
+      "ref_std": 210.07484642606252,
+      "tgt_std": 183.70545341210254,
+      "ref_iqr": 334.25,
+      "tgt_iqr": 153.5,
+      "feature": "H1_count",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.3408192447310908,
+      "raw_wasserstein": 29.660993711626837,
+      "ks_statistic": 0.21199903996602956,
+      "ks_pvalue": 2.6520332066109623e-22,
+      "cohen_d": -0.34081924473109076,
+      "psi": 0.21260541753755474,
+      "ref_mean": 86.05007071720944,
+      "tgt_mean": 56.38907700558261,
+      "ref_median": 45.56348919868469,
+      "tgt_median": 19.0538227558136,
+      "ref_std": 87.0285178145665,
+      "tgt_std": 76.09947479991388,
+      "ref_iqr": 138.45087513327599,
+      "tgt_iqr": 63.399608969688416,
+      "feature": "H1_total_persistence",
+      "family": "Topological Persistence"
+    },
+    {
+      "norm_wasserstein": 0.3161411667817972,
+      "raw_wasserstein": 0.14525843353232457,
+      "ks_statistic": 0.14166270498802266,
+      "ks_pvalue": 3.6025853490179427e-10,
+      "cohen_d": -0.31611679254734776,
+      "psi": 0.10351106891378829,
+      "ref_mean": 1.6593568892933965,
+      "tgt_mean": 1.5141096550716544,
+      "ref_median": 1.7029845653687887,
+      "tgt_median": 1.5339850002884627,
+      "ref_std": 0.4594733264604635,
+      "tgt_std": 0.48555973062550384,
+      "ref_iqr": 0.6811111727920354,
+      "tgt_iqr": 0.6604899180541459,
+      "feature": "fractal_dimension",
+      "family": "Fractal Complexity"
+    },
+    {
+      "norm_wasserstein": 0.24920883638243313,
+      "raw_wasserstein": 4.291433903029019,
+      "ks_statistic": 0.1423150357628039,
+      "ks_pvalue": 2.930057941864434e-10,
+      "cohen_d": 0.24820338227424793,
+      "psi": 0.10012601875579416,
+      "ref_mean": 17.89528174945936,
+      "tgt_mean": 22.16940149978641,
+      "ref_median": 13.070823711522904,
+      "tgt_median": 16.02321901823504,
+      "ref_std": 17.220231695329744,
+      "tgt_std": 21.514823975362273,
+      "ref_iqr": 11.837864018195228,
+      "tgt_iqr": 14.463914052865,
+      "feature": "lacunarity_4",
+      "family": "Fractal Complexity"
+    },
+    {
+      "norm_wasserstein": 0.24683832465165678,
+      "raw_wasserstein": 7.790601468366431,
+      "ks_statistic": 0.15955179952521398,
+      "ks_pvalue": 8.631625043530083e-13,
+      "cohen_d": -0.21922401401014377,
+      "psi": 0.14853372012542695,
+      "ref_mean": -158.7338851083753,
+      "tgt_mean": -165.65293598047472,
+      "ref_median": -145.0868574413377,
+      "tgt_median": -166.64628928806107,
+      "ref_std": 31.5615554406338,
+      "tgt_std": 31.42353613956078,
+      "ref_iqr": 58.05041916895547,
+      "tgt_iqr": 56.742303436676366,
+      "feature": "quantum_eigenvalue_0",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.24531311090872837,
+      "raw_wasserstein": 7.5087552230563,
+      "ks_statistic": 0.15429007487957266,
+      "ks_pvalue": 5.49056748626042e-12,
+      "cohen_d": -0.2123800469862748,
+      "psi": 0.16120448577206023,
+      "ref_mean": -157.30735721341185,
+      "tgt_mean": -163.80806881897485,
+      "ref_median": -143.84579454662605,
+      "tgt_median": -163.83786775053426,
+      "ref_std": 30.608862262767605,
+      "tgt_std": 30.541430509441152,
+      "ref_iqr": 57.48243113450599,
+      "tgt_iqr": 55.236545695916504,
+      "feature": "quantum_eigenvalue_1",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.24034062714569276,
+      "raw_wasserstein": 7.2321974589805755,
+      "ks_statistic": 0.15041532238833066,
+      "ks_pvalue": 2.0603913168241013e-11,
+      "cohen_d": -0.20740741472038476,
+      "psi": 0.15384581278217052,
+      "ref_mean": -156.48579774049256,
+      "tgt_mean": -162.72698715373812,
+      "ref_median": -143.37780827057992,
+      "tgt_median": -163.16374088897368,
+      "ref_std": 30.091447895725384,
+      "tgt_std": 30.102482192684448,
+      "ref_iqr": 57.048433329892816,
+      "tgt_iqr": 55.196687429189666,
+      "feature": "quantum_eigenvalue_2",
+      "family": "Quantum Graph Laplacian"
+    },
+    {
+      "norm_wasserstein": 0.18381621818597316,
+      "raw_wasserstein": 0.04165188899644306,
+      "ks_statistic": 0.10411368402266542,
+      "ks_pvalue": 1.0861414611121048e-05,
+      "cohen_d": 0.18361830773642632,
+      "psi": 0.04952434415080878,
+      "ref_mean": 0.36016521520918315,
+      "tgt_mean": 0.40177225863020793,
+      "ref_median": 0.3369203134235813,
+      "tgt_median": 0.3996320838020721,
+      "ref_std": 0.22659528853053879,
+      "tgt_std": 0.22960683798640566,
+      "ref_iqr": 0.36436713318802255,
+      "tgt_iqr": 0.36753773769493503,
+      "feature": "blobness_ratio",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.1637336848238112,
+      "raw_wasserstein": 0.002854830910037037,
+      "ks_statistic": 0.07687964343353688,
+      "ks_pvalue": 0.002661439475404956,
+      "cohen_d": -0.16315573637484526,
+      "psi": 0.08751909979965959,
+      "ref_mean": 0.01577528183165297,
+      "tgt_mean": 0.01293052792622431,
+      "ref_median": 0.00839310942293272,
+      "tgt_median": 0.006867001133859718,
+      "ref_std": 0.017435819105329688,
+      "tgt_std": 0.014551411469981524,
+      "ref_iqr": 0.0201765909760647,
+      "tgt_iqr": 0.015247991485775938,
+      "feature": "hessian_L1",
+      "family": "Differential Geometry / Hessian"
+    },
+    {
+      "norm_wasserstein": 0.15412525608432268,
+      "raw_wasserstein": 0.5920633067401261,
+      "ks_statistic": 0.08227829600124312,
+      "ks_pvalue": 0.0010199103118311219,
+      "cohen_d": 0.15391220605909547,
+      "psi": 0.07716592015594285,
+      "ref_mean": 5.443813639860038,
+      "tgt_mean": 6.035058527181818,
+      "ref_median": 4.61564022185881,
+      "tgt_median": 4.836889281656356,
+      "ref_std": 3.8414424850409032,
+      "tgt_std": 4.302818271597195,
+      "ref_iqr": 4.220556166142282,
+      "tgt_iqr": 4.387453521151401,
+      "feature": "lacunarity_8",
+      "family": "Fractal Complexity"
+    },
+    {
+      "norm_wasserstein": 0.1118956158490043,
+      "raw_wasserstein": 0.023707979214660634,
+      "ks_statistic": 0.05961518638351818,
+      "ks_pvalue": 0.03693547970318739,
+      "cohen_d": -0.05746347975887408,
+      "psi": 0.049223615875617674,
+      "ref_mean": 0.6422334167690685,
+      "tgt_mean": 0.6300582928967995,
+      "ref_median": 0.6895701303809714,
+      "tgt_median": 0.6721010464216138,
+      "ref_std": 0.21187585442715626,
+      "tgt_std": 0.23264996046527409,
+      "ref_iqr": 0.3034251244020765,
+      "tgt_iqr": 0.36076766523068127,
+      "feature": "vesselness_ratio",
+      "family": "Differential Geometry / Hessian"
+    }
+  ],
+  "class_conditional_shift": [
+    {
+      "feature": "H0_entropy",
+      "family": "Topological Persistence",
+      "norm_wd_pos": 0.40838660356408757,
+      "ks_pos": 0.1749810029939761,
+      "psi_pos": 0.17391535690567614,
+      "cohen_d_pos": -0.40838660356408746,
+      "norm_wd_neg": 0.5881060523259333,
+      "ks_neg": 0.2695420221128321,
+      "psi_neg": 0.36011434968761924,
+      "cohen_d_neg": -0.5878814832562425
+    },
+    {
+      "feature": "H0_total_persistence",
+      "family": "Topological Persistence",
+      "norm_wd_pos": 0.2461482854966409,
+      "ks_pos": 0.1603323337432372,
+      "psi_pos": 0.17150840015769517,
+      "cohen_d_pos": -0.24608609878710977,
+      "norm_wd_neg": 0.48052040871655327,
+      "ks_neg": 0.26124756234804947,
+      "psi_neg": 0.34077256813048595,
+      "cohen_d_neg": -0.48052040871655327
+    },
+    {
+      "feature": "H1_count",
+      "family": "Topological Persistence",
+      "norm_wd_pos": 0.24201650414392173,
+      "ks_pos": 0.19956085154528957,
+      "psi_pos": 0.18113566027666525,
+      "cohen_d_pos": -0.24201299079457644,
+      "norm_wd_neg": 0.4717510235141907,
+      "ks_neg": 0.27363985464292157,
+      "psi_neg": 0.40623539718931145,
+      "cohen_d_neg": -0.4717510235141906
+    },
+    {
+      "feature": "H1_total_persistence",
+      "family": "Topological Persistence",
+      "norm_wd_pos": 0.24187920721007758,
+      "ks_pos": 0.20024402463258473,
+      "psi_pos": 0.1803197365117349,
+      "cohen_d_pos": -0.2418756942438305,
+      "norm_wd_neg": 0.47141223933525694,
+      "ks_neg": 0.2750229805073752,
+      "psi_neg": 0.40634308613468917,
+      "cohen_d_neg": -0.47141223933525683
+    },
+    {
+      "feature": "blobness_ratio",
+      "family": "Differential Geometry / Hessian",
+      "norm_wd_pos": 0.11936563262232616,
+      "ks_pos": 0.0629669847616445,
+      "psi_pos": 0.05369460472057667,
+      "cohen_d_pos": -0.11827064498210649,
+      "norm_wd_neg": 0.45125897797533526,
+      "ks_neg": 0.15045574426775943,
+      "psi_neg": 0.15402620535990136,
+      "cohen_d_neg": 0.4512589779753351
+    },
+    {
+      "feature": "fractal_dimension",
+      "family": "Fractal Complexity",
+      "norm_wd_pos": 0.1313308253171485,
+      "ks_pos": 0.06326422498208169,
+      "psi_pos": 0.03573423327098669,
+      "cohen_d_pos": -0.13038715328791264,
+      "norm_wd_neg": 0.5781334032790382,
+      "ks_neg": 0.27236411432695035,
+      "psi_neg": 0.30819785614625833,
+      "cohen_d_neg": -0.5781305332562822
+    },
+    {
+      "feature": "hessian_L1",
+      "family": "Differential Geometry / Hessian",
+      "norm_wd_pos": 0.3973289944420523,
+      "ks_pos": 0.1791711312627196,
+      "psi_pos": 0.27712749369796763,
+      "cohen_d_pos": -0.3971867466061883,
+      "norm_wd_neg": 0.16196789337220935,
+      "ks_neg": 0.08141542743743718,
+      "psi_neg": 0.07836631165684946,
+      "cohen_d_neg": 0.05532962380780601
+    },
+    {
+      "feature": "hessian_L2",
+      "family": "Differential Geometry / Hessian",
+      "norm_wd_pos": 0.4444360316591276,
+      "ks_pos": 0.1945676952616553,
+      "psi_pos": 0.37877879620705873,
+      "cohen_d_pos": -0.444025683216534,
+      "norm_wd_neg": 0.40683252623537963,
+      "ks_neg": 0.24981744456757987,
+      "psi_neg": 0.38773469970848656,
+      "cohen_d_neg": -0.4013874070370063
+    },
+    {
+      "feature": "hessian_L3",
+      "family": "Differential Geometry / Hessian",
+      "norm_wd_pos": 0.4240233532836875,
+      "ks_pos": 0.188035601707693,
+      "psi_pos": 0.3350942806987306,
+      "cohen_d_pos": -0.4234861149946389,
+      "norm_wd_neg": 0.3826485849765391,
+      "ks_neg": 0.23288059586093143,
+      "psi_neg": 0.3029516893210334,
+      "cohen_d_neg": -0.37026685050347113
+    },
+    {
+      "feature": "lacunarity_4",
+      "family": "Fractal Complexity",
+      "norm_wd_pos": 0.27713908057583314,
+      "ks_pos": 0.16725036016405742,
+      "psi_pos": 0.12717336685387004,
+      "cohen_d_pos": 0.2768576747715675,
+      "norm_wd_neg": 0.25386810157861567,
+      "ks_neg": 0.1429258696081716,
+      "psi_neg": 0.14581281289381462,
+      "cohen_d_neg": 0.2520432580809966
+    },
+    {
+      "feature": "lacunarity_8",
+      "family": "Fractal Complexity",
+      "norm_wd_pos": 0.217915722005781,
+      "ks_pos": 0.14191063137178758,
+      "psi_pos": 0.2189312410473474,
+      "cohen_d_pos": 0.21781035533284498,
+      "norm_wd_neg": 0.12768821674348182,
+      "ks_neg": 0.055329330000085906,
+      "psi_neg": 0.0971982848179476,
+      "cohen_d_neg": 0.12033791036822684
+    },
+    {
+      "feature": "quantum_eigenvalue_0",
+      "family": "Quantum Graph Laplacian",
+      "norm_wd_pos": 0.12297088426601542,
+      "ks_pos": 0.10371286594705768,
+      "psi_pos": 0.14123172951280008,
+      "cohen_d_pos": -0.05044423930503878,
+      "norm_wd_neg": 0.5195851505549248,
+      "ks_neg": 0.2826473544496276,
+      "psi_neg": 0.4784976861193504,
+      "cohen_d_neg": -0.48659477016377456
+    },
+    {
+      "feature": "quantum_eigenvalue_1",
+      "family": "Quantum Graph Laplacian",
+      "norm_wd_pos": 0.12365781392806913,
+      "ks_pos": 0.10099695328774051,
+      "psi_pos": 0.15322661287496495,
+      "cohen_d_pos": -0.04988977572260354,
+      "norm_wd_neg": 0.5054741472349095,
+      "ks_neg": 0.2802719861171963,
+      "psi_neg": 0.44229789095907013,
+      "cohen_d_neg": -0.46867706711760676
+    },
+    {
+      "feature": "quantum_eigenvalue_2",
+      "family": "Quantum Graph Laplacian",
+      "norm_wd_pos": 0.11903429596113174,
+      "ks_pos": 0.09748040971208449,
+      "psi_pos": 0.1406877845030388,
+      "cohen_d_pos": -0.04802491717395594,
+      "norm_wd_neg": 0.496366764580163,
+      "ks_neg": 0.28196867778321866,
+      "psi_neg": 0.41356813135175696,
+      "cohen_d_neg": -0.4572903480631623
+    },
+    {
+      "feature": "vesselness_ratio",
+      "family": "Differential Geometry / Hessian",
+      "norm_wd_pos": 0.19573339829185807,
+      "ks_pos": 0.09909365703752178,
+      "psi_pos": 0.09662599175483116,
+      "cohen_d_pos": -0.1924503411572007,
+      "norm_wd_neg": 0.17538077068608102,
+      "ks_neg": 0.09288849943729972,
+      "psi_neg": 0.08114594128467575,
+      "cohen_d_neg": -0.10168978165510549
+    }
+  ],
+  "agreement_level_shift": {
+    "0": {
+      "n": 322,
+      "features": {
+        "H0_entropy": {
+          "norm_wasserstein": 0.5881060523259333,
+          "ks_statistic": 0.2695420221128321,
+          "psi": 0.36011434968761924,
+          "cohen_d": -0.5878814832562425
+        },
+        "H0_total_persistence": {
+          "norm_wasserstein": 0.48052040871655327,
+          "ks_statistic": 0.26124756234804947,
+          "psi": 0.34077256813048595,
+          "cohen_d": -0.48052040871655327
+        },
+        "H1_count": {
+          "norm_wasserstein": 0.4717510235141907,
+          "ks_statistic": 0.27363985464292157,
+          "psi": 0.40623539718931145,
+          "cohen_d": -0.4717510235141906
+        },
+        "H1_total_persistence": {
+          "norm_wasserstein": 0.47141223933525694,
+          "ks_statistic": 0.2750229805073752,
+          "psi": 0.40634308613468917,
+          "cohen_d": -0.47141223933525683
+        },
+        "blobness_ratio": {
+          "norm_wasserstein": 0.45125897797533526,
+          "ks_statistic": 0.15045574426775943,
+          "psi": 0.15402620535990136,
+          "cohen_d": 0.4512589779753351
+        },
+        "fractal_dimension": {
+          "norm_wasserstein": 0.5781334032790382,
+          "ks_statistic": 0.27236411432695035,
+          "psi": 0.30819785614625833,
+          "cohen_d": -0.5781305332562822
+        },
+        "hessian_L1": {
+          "norm_wasserstein": 0.16196789337220935,
+          "ks_statistic": 0.08141542743743718,
+          "psi": 0.07836631165684946,
+          "cohen_d": 0.05532962380780601
+        },
+        "hessian_L2": {
+          "norm_wasserstein": 0.40683252623537963,
+          "ks_statistic": 0.24981744456757987,
+          "psi": 0.38773469970848656,
+          "cohen_d": -0.4013874070370063
+        },
+        "hessian_L3": {
+          "norm_wasserstein": 0.3826485849765391,
+          "ks_statistic": 0.23288059586093143,
+          "psi": 0.3029516893210334,
+          "cohen_d": -0.37026685050347113
+        },
+        "lacunarity_4": {
+          "norm_wasserstein": 0.25386810157861567,
+          "ks_statistic": 0.1429258696081716,
+          "psi": 0.14581281289381462,
+          "cohen_d": 0.2520432580809966
+        },
+        "lacunarity_8": {
+          "norm_wasserstein": 0.12768821674348182,
+          "ks_statistic": 0.055329330000085906,
+          "psi": 0.0971982848179476,
+          "cohen_d": 0.12033791036822684
+        },
+        "quantum_eigenvalue_0": {
+          "norm_wasserstein": 0.5195851505549248,
+          "ks_statistic": 0.2826473544496276,
+          "psi": 0.4784976861193504,
+          "cohen_d": -0.48659477016377456
+        },
+        "quantum_eigenvalue_1": {
+          "norm_wasserstein": 0.5054741472349095,
+          "ks_statistic": 0.2802719861171963,
+          "psi": 0.44229789095907013,
+          "cohen_d": -0.46867706711760676
+        },
+        "quantum_eigenvalue_2": {
+          "norm_wasserstein": 0.496366764580163,
+          "ks_statistic": 0.28196867778321866,
+          "psi": 0.41356813135175696,
+          "cohen_d": -0.4572903480631623
+        },
+        "vesselness_ratio": {
+          "norm_wasserstein": 0.17538077068608102,
+          "ks_statistic": 0.09288849943729972,
+          "psi": 0.08114594128467575,
+          "cohen_d": -0.10168978165510549
+        }
+      }
+    },
+    "1": {
+      "n": 414,
+      "features": {
+        "H0_entropy": {
+          "norm_wasserstein": 0.42143950719440554,
+          "ks_statistic": 0.1809689899172129,
+          "psi": 0.22756083100326915,
+          "cohen_d": -0.42126525185960123
+        },
+        "H0_total_persistence": {
+          "norm_wasserstein": 0.24066951253984903,
+          "ks_statistic": 0.16428127568304368,
+          "psi": 0.21122543163922838,
+          "cohen_d": -0.24030729764077957
+        },
+        "H1_count": {
+          "norm_wasserstein": 0.23915139556599949,
+          "ks_statistic": 0.19928037364443643,
+          "psi": 0.20095200711164657,
+          "cohen_d": -0.2391377118480214
+        },
+        "H1_total_persistence": {
+          "norm_wasserstein": 0.23903025630623523,
+          "ks_statistic": 0.20033275201956421,
+          "psi": 0.19786099045473565,
+          "cohen_d": -0.2390165740803397
+        },
+        "blobness_ratio": {
+          "norm_wasserstein": 0.18441181649486912,
+          "ks_statistic": 0.10829474612624532,
+          "psi": 0.07148251602076101,
+          "cohen_d": -0.18440954421483385
+        },
+        "fractal_dimension": {
+          "norm_wasserstein": 0.10212917095999552,
+          "ks_statistic": 0.060967787199069895,
+          "psi": 0.03568928620433282,
+          "cohen_d": -0.0923922737729409
+        },
+        "hessian_L1": {
+          "norm_wasserstein": 0.4701093359299232,
+          "ks_statistic": 0.20460240142722552,
+          "psi": 0.39258632578513397,
+          "cohen_d": -0.47010933592992327
+        },
+        "hessian_L2": {
+          "norm_wasserstein": 0.5113477252730338,
+          "ks_statistic": 0.2250887004630465,
+          "psi": 0.5655594408578787,
+          "cohen_d": -0.5106970730973858
+        },
+        "hessian_L3": {
+          "norm_wasserstein": 0.46301510719529837,
+          "ks_statistic": 0.21606831439052257,
+          "psi": 0.38561963639432945,
+          "cohen_d": -0.4620982486238001
+        },
+        "lacunarity_4": {
+          "norm_wasserstein": 0.36372098190331925,
+          "ks_statistic": 0.18386553611161224,
+          "psi": 0.16829702323741413,
+          "cohen_d": 0.36357498996893467
+        },
+        "lacunarity_8": {
+          "norm_wasserstein": 0.3001160290983406,
+          "ks_statistic": 0.16888167258003087,
+          "psi": 0.34769358650680776,
+          "cohen_d": 0.3001160290983405
+        },
+        "quantum_eigenvalue_0": {
+          "norm_wasserstein": 0.10025047039251664,
+          "ks_statistic": 0.08942209393228696,
+          "psi": 0.12263630092417925,
+          "cohen_d": 0.0019491391296635914
+        },
+        "quantum_eigenvalue_1": {
+          "norm_wasserstein": 0.09993667553924784,
+          "ks_statistic": 0.08453104015074067,
+          "psi": 0.15482980308763142,
+          "cohen_d": -0.00017355490171696992
+        },
+        "quantum_eigenvalue_2": {
+          "norm_wasserstein": 0.09422344874204179,
+          "ks_statistic": 0.0852326257341592,
+          "psi": 0.1506812445249558,
+          "cohen_d": 0.002144809452860617
+        },
+        "vesselness_ratio": {
+          "norm_wasserstein": 0.32066377528887396,
+          "ks_statistic": 0.1356966744843346,
+          "psi": 0.18086549258044607,
+          "cohen_d": -0.3195237392146222
+        }
+      }
+    },
+    "2": {
+      "n": 130,
+      "features": {
+        "H0_entropy": {
+          "norm_wasserstein": 0.3994927853841508,
+          "ks_statistic": 0.17202893924885626,
+          "psi": 0.12371843004623222,
+          "cohen_d": -0.39949278538415006
+        },
+        "H0_total_persistence": {
+          "norm_wasserstein": 0.2928650563453147,
+          "ks_statistic": 0.17695499521225663,
+          "psi": 0.15928696978466192,
+          "cohen_d": -0.29286505634531457
+        },
+        "H1_count": {
+          "norm_wasserstein": 0.2812927277512349,
+          "ks_statistic": 0.21041600170230876,
+          "psi": 0.2270502040829251,
+          "cohen_d": -0.2812927277512348
+        },
+        "H1_total_persistence": {
+          "norm_wasserstein": 0.28109542920779484,
+          "ks_statistic": 0.21041600170230876,
+          "psi": 0.2265961133166269,
+          "cohen_d": -0.28109542920779484
+        },
+        "blobness_ratio": {
+          "norm_wasserstein": 0.08691098412463542,
+          "ks_statistic": 0.07207149696776252,
+          "psi": 0.1383501127490329,
+          "cohen_d": -0.005975392043772887
+        },
+        "fractal_dimension": {
+          "norm_wasserstein": 0.2269970291170353,
+          "ks_statistic": 0.09167996595382487,
+          "psi": 0.15713829500358034,
+          "cohen_d": -0.22678249996012823
+        },
+        "hessian_L1": {
+          "norm_wasserstein": 0.2560636812994653,
+          "ks_statistic": 0.13920629854239813,
+          "psi": 0.17584247189986857,
+          "cohen_d": -0.2523785836544109
+        },
+        "hessian_L2": {
+          "norm_wasserstein": 0.28874111349733966,
+          "ks_statistic": 0.1459516969890414,
+          "psi": 0.1676842054778624,
+          "cohen_d": -0.28778764161376597
+        },
+        "hessian_L3": {
+          "norm_wasserstein": 0.3223212011995556,
+          "ks_statistic": 0.16814554739865945,
+          "psi": 0.38691984161484677,
+          "cohen_d": -0.3217190326660529
+        },
+        "lacunarity_4": {
+          "norm_wasserstein": 0.16913196767958083,
+          "ks_statistic": 0.16259176508139164,
+          "psi": 0.15714934423592603,
+          "cohen_d": 0.0961539710013559
+        },
+        "lacunarity_8": {
+          "norm_wasserstein": 0.11408318239989658,
+          "ks_statistic": 0.0908713692946058,
+          "psi": 0.15540486273724358,
+          "cohen_d": 0.019051708213783256
+        },
+        "quantum_eigenvalue_0": {
+          "norm_wasserstein": 0.20263932163180076,
+          "ks_statistic": 0.1752633258857325,
+          "psi": 0.2191300306575995,
+          "cohen_d": -0.18242235435787518
+        },
+        "quantum_eigenvalue_1": {
+          "norm_wasserstein": 0.19944708096828406,
+          "ks_statistic": 0.16912437493350357,
+          "psi": 0.20742456185133498,
+          "cohen_d": -0.17515648717825322
+        },
+        "quantum_eigenvalue_2": {
+          "norm_wasserstein": 0.19614746103233416,
+          "ks_statistic": 0.16220874561123524,
+          "psi": 0.17144730816633488,
+          "cohen_d": -0.17326765326126423
+        },
+        "vesselness_ratio": {
+          "norm_wasserstein": 0.13031091105184806,
+          "ks_statistic": 0.1043728056176189,
+          "psi": 0.11951268296877737,
+          "cohen_d": 0.11141692451950976
+        }
+      }
+    },
+    "3": {
+      "n": 33,
+      "features": {
+        "H0_entropy": {
+          "norm_wasserstein": 0.2890301992881413,
+          "ks_statistic": 0.19891864705142714,
+          "psi": 0.4224504090123676,
+          "cohen_d": -0.281854360201934
+        },
+        "H0_total_persistence": {
+          "norm_wasserstein": 0.15245407372387487,
+          "ks_statistic": 0.1730164717716585,
+          "psi": 0.20172273914736144,
+          "cohen_d": -0.1343030439996579
+        },
+        "H1_count": {
+          "norm_wasserstein": 0.15100134626831527,
+          "ks_statistic": 0.19489500817301647,
+          "psi": 0.2804050397270917,
+          "cohen_d": -0.12334631441603681
+        },
+        "H1_total_persistence": {
+          "norm_wasserstein": 0.15102706099837104,
+          "ks_statistic": 0.19489500817301647,
+          "psi": 0.2581761479300942,
+          "cohen_d": -0.12324267007322069
+        },
+        "blobness_ratio": {
+          "norm_wasserstein": 0.3782408584534066,
+          "ks_statistic": 0.25311203319502074,
+          "psi": 0.5524885247485286,
+          "cohen_d": 0.26909667018049077
+        },
+        "fractal_dimension": {
+          "norm_wasserstein": 0.24782846974434403,
+          "ks_statistic": 0.14900037721614484,
+          "psi": 0.18120733687524443,
+          "cohen_d": -0.22731094273671035
+        },
+        "hessian_L1": {
+          "norm_wasserstein": 0.11651904481117482,
+          "ks_statistic": 0.10172262039481957,
+          "psi": 1.018091591242998,
+          "cohen_d": -0.05279611641542392
+        },
+        "hessian_L2": {
+          "norm_wasserstein": 0.2231793043349429,
+          "ks_statistic": 0.14749151263674085,
+          "psi": 0.2566212197396702,
+          "cohen_d": -0.22308598617675376
+        },
+        "hessian_L3": {
+          "norm_wasserstein": 0.3400579135403793,
+          "ks_statistic": 0.1946435307431158,
+          "psi": 0.8341749029467627,
+          "cohen_d": -0.33997997500202054
+        },
+        "lacunarity_4": {
+          "norm_wasserstein": 0.1706205118101352,
+          "ks_statistic": 0.08110147114296491,
+          "psi": 0.15727593642133852,
+          "cohen_d": -0.09918738588244792
+        },
+        "lacunarity_8": {
+          "norm_wasserstein": 0.1262718934196415,
+          "ks_statistic": 0.07644913868980259,
+          "psi": 0.20516603367579736,
+          "cohen_d": -0.03176312386221406
+        },
+        "quantum_eigenvalue_0": {
+          "norm_wasserstein": 0.2531217005201304,
+          "ks_statistic": 0.19451779202816546,
+          "psi": 1.0479632906342002,
+          "cohen_d": -0.1878292003686079
+        },
+        "quantum_eigenvalue_1": {
+          "norm_wasserstein": 0.2455300434822631,
+          "ks_statistic": 0.1820696592480825,
+          "psi": 0.9211905211174339,
+          "cohen_d": -0.18012744028662703
+        },
+        "quantum_eigenvalue_2": {
+          "norm_wasserstein": 0.2510551627547949,
+          "ks_statistic": 0.18621903684144347,
+          "psi": 0.9211905211174339,
+          "cohen_d": -0.18404646663312507
+        },
+        "vesselness_ratio": {
+          "norm_wasserstein": 0.28127381321229467,
+          "ks_statistic": 0.16647805859424117,
+          "psi": 0.32003063212410593,
+          "cohen_d": 0.20469033332160294
+        }
+      }
+    }
+  }
+}
