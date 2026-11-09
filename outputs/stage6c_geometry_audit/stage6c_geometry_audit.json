@@ -1,0 +1,107 @@
+{
+  "experiment": "TQ-BioNet Stage 6C native geometry and coordinate audit",
+  "audit_only": true,
+  "created_local": "2026-11-09T17:47:26.314908",
+  "inventory": {
+    "LUNA16": {
+      "root": "D:\\LUNA16",
+      "mhd_count": 89
+    },
+    "LNDb": {
+      "root": "D:\\LNDb",
+      "mhd_count": 236
+    }
+  },
+  "scan_header_count": 325,
+  "header_errors": 0,
+  "coordinate_checks": 1331,
+  "coordinate_roundtrip_failures": 0,
+  "coordinates_outside_volume": 0,
+  "dataset_geometry": {
+    "LNDb": {
+      "valid_scans": 236,
+      "spacing_xyz_mm_median": [
+        0.6435546875,
+        0.6435546875,
+        1.0
+      ],
+      "spacing_xyz_mm_min": [
+        0.43278905749320984,
+        0.4327886402606964,
+        0.5
+      ],
+      "spacing_xyz_mm_max": [
+        0.89453125,
+        0.89453125,
+        1.3999999999999773
+      ],
+      "direction_orthogonality_max_error": 2.508063927786218e-08,
+      "direction_determinant_min": 0.9999999999999996,
+      "direction_determinant_max": 1.0000000000000002
+    },
+    "LUNA16": {
+      "valid_scans": 89,
+      "spacing_xyz_mm_median": [
+        0.6972659826278687,
+        0.6972659826278687,
+        1.25
+      ],
+      "spacing_xyz_mm_min": [
+        0.513671875,
+        0.513671875,
+        0.5
+      ],
+      "spacing_xyz_mm_max": [
+        0.9765620231628418,
+        0.9765620231628418,
+        2.5
+      ],
+      "direction_orthogonality_max_error": 2.220446049250313e-16,
+      "direction_determinant_min": 0.9999999999999998,
+      "direction_determinant_max": 1.0
+    }
+  },
+  "files": {
+    "scan_geometry.csv": "Native MHD geometry and physical extents",
+    "annotation_coordinate_checks.csv": "Physical coordinate round-trip and in-volume checks"
+  },
+  "interpretation": [
+    "MHD header spacing is voxel-center spacing, not necessarily a separately recorded acquisition slice-thickness value.",
+    "A physical-coordinate round trip checks coordinate-system arithmetic, not whether annotation coordinates use the intended patient-coordinate convention.",
+    "No image resampling or model fitting is performed by this script."
+  ],
+  "patch_field_of_view_examples_mm": {
+    "0.7": [
+      22.4,
+      22.4,
+      22.4
+    ],
+    "0.8": [
+      25.6,
+      25.6,
+      25.6
+    ],
+    "1.0": [
+      32.0,
+      32.0,
+      32.0
+    ],
+    "1.25": [
+      40.0,
+      40.0,
+      40.0
+    ],
+    "1.5": [
+      48.0,
+      48.0,
+      48.0
+    ]
+  },
+  "extent_preserving_output_size_formula": "round((input_size_xyz - 1) * input_spacing_xyz / target_spacing_xyz) + 1",
+  "current_legacy_formula": "round(input_size_xyz * input_spacing_xyz / target_spacing_xyz)",
+  "notes": [
+    "The extent-preserving formula preserves first-to-last voxel-center distance.",
+    "The legacy formula can differ by approximately one output voxel depending on dimensions and spacing.",
+    "The experiment should compare both geometry metadata and annotation-center mapping before model performance."
+  ]
+}
