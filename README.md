@@ -24,11 +24,11 @@ The current implementation extracts 31 descriptors, with a 15-feature subset use
 
 ## 🌟 Key Technical Contributions
 
-* **Zero-Trainable-Parameter Feature Extraction ($W = 0$):** Zero GPU backward propagation during feature extraction, eliminating the risk of memorizing scanner hardware noise.
-* **Local Z-Score IQR Normalization:** $\hat{I} = \frac{I - \text{Median}(I)}{\text{IQR}(I) + 10^{-6}}$ standardizes local contrast and suppresses multi-vendor attenuation drift across scanner manufacturers (GE, Siemens, Philips).
-* **Juxta-Vascular Separation:** Multi-scale Frangi vesselness filter ($\mathcal{V}_\sigma$) and 3D Blobness ratios ($R_B$) mathematically separate tubular vessels from spherical nodules.
-* **3D Schrödinger Density Well:** Discretized 3D Hamiltonian eigenvalue equation solved via SciPy ARPACK Lanczos solver, extracting core density concentration states ($E_0, E_1, E_2$).
-* **Sublevel Persistent Homology:** Captures microstructural tissue connectivity ($H_0$ persistent entropy, $\beta_1$ 1D loops).
+* **Hand-engineered feature extraction:** The feature extractor has no learned neural-network weights; the downstream SVM, XGBoost, and Random Forest classifiers are trained from data.
+* **Local median/IQR normalization:** Each 3D patch is standardized using its median and interquartile range, clipped to [-3, 3], then mapped to [0, 1]. This is a preprocessing choice, not evidence of scanner invariance.
+* **Point-cloud persistent homology:** Vietoris–Rips persistence is computed on a point cloud derived from the density field; it is not a voxel sublevel-set filtration.
+* **Single-scale Hessian descriptors:** Finite-difference Hessian eigenvalues and ratios are evaluated at the patch center. The current implementation is not a multi-scale Frangi vesselness filter.
+* **Schrödinger-inspired numerical descriptors:** A finite-difference eigenproblem produces density-related features; the current operator does not include physical grid-spacing scaling.
 * **Runtime:** Benchmark numbers must be regenerated on documented hardware and software versions before being treated as reproducible performance claims.
 
 ---
@@ -53,11 +53,24 @@ Previously reported repository metrics are retained here as historical records o
 * **Subset 8 ($N=236$):** Accuracy = 84.32%, Specificity = 88.98%, AUC-ROC = 0.9199
 * **Subset 9 ($N=210$):** Accuracy = 86.19%, Specificity = 92.38%, AUC-ROC = 0.9123
 
-### 2. LNDb external validation — currently blocked
-Evaluated on external CT volumes from the University Hospital of São João with thicker slices ($1.25 - 2.5\,\text{mm}$) and different reconstruction kernels with **zero fine-tuning**:
-* **Accuracy:** **72.98%**
-* **Specificity:** **81.96%** (Successfully rejected 159 out of 194 non-nodule false alarms; $\text{TN} = 159, \text{FP} = 35$)
-* **Sensitivity:** **40.74%** (Reflects expected real-world domain shift on thick slices)
+### 2. LNDb zero-shot external evaluation — completed, weak transfer performance
+
+A frozen v3.1 pipeline trained on LUNA16 subsets 0–5 was evaluated without retraining, recalibration, or threshold tuning on 1,219 findings from 229 annotated LNDb scans. The official `trainNodules_gt.csv` `Nodule` field supplied the binary labels. All 1,219 findings completed feature extraction; zero were excluded.
+
+| Ensemble metric | Result |
+| :--- | :---: |
+| Accuracy (threshold 0.5) | 54.72% |
+| Sensitivity | 51.04% |
+| Specificity | 60.98% |
+| Precision | 69.01% |
+| F1 | 0.5868 |
+| ROC-AUC | 0.5729 |
+| Average precision | 0.6934 |
+| Brier score | 0.2763 |
+
+Scan-cluster bootstrap 95% CI for ensemble ROC-AUC: [0.5350, 0.6091]. The result indicates weak zero-shot transfer from LUNA16 to this LNDb cohort; it does not support a claim of robust external generalization. Agreement-level accuracy was 42.05% for AgrLevel 1, 71.19% for AgrLevel 2, and 81.82% for AgrLevel 3. Since each agreement stratum contains only one class, these are within-stratum correct-classification rates, not AUCs or a comparison of balanced sensitivity across strata.
+
+The LNDb public cohort contains repeated/overlapping finding coordinates with conflicting official labels in a small number of records; these require annotation-level review before a refined interpretation. See `outputs/lndb_external_validation_v3_1/` for the predictions, metrics, exclusions, and manifest.
 
 ---
 
