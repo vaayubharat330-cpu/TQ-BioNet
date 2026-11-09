@@ -398,10 +398,13 @@ def compute_fold3_conflict_sensitivity(
     # Carry the ground-truth row's volume for transparent tie-breaking.
     gt_keys = gt_df.copy()
     gt_keys["seriesuid"] = gt_keys["LNDbID"].map(lambda v: f"LNDb-{int(v):04d}")
+    gt_keys["raw_label"] = gt_keys["Nodule"].astype(int)
+    gt_keys["agr_level"] = gt_keys["AgrLevel"].astype(int)
     key_cols = ["seriesuid", "x", "y", "z"]
+    join_cols = key_cols + ["raw_label", "agr_level"]
     test_df = test_df.merge(
-        gt_keys[key_cols + ["Volume", "FindingID"]],
-        on=key_cols, how="left", validate="one_to_one"
+        gt_keys[join_cols + ["Volume", "FindingID"]],
+        on=join_cols, how="left", validate="one_to_one"
     )
     if test_df["FindingID"].isna().any():
         raise ValueError("Fold 3 predictions failed to join back to ground-truth finding rows.")
