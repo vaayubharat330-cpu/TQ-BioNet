@@ -314,7 +314,7 @@ def run_stage6d_experiment(
 
     # Load frozen model bundle
     print(f"Loading frozen v3.1 model bundle from {bundle_dir}...")
-    svm, xgb, rf, scaler = load_pipeline_bundle(bundle_dir)
+    svm, xgb, rf, scaler, bundle_manifest = load_pipeline_bundle(bundle_dir)
     print("Frozen pipeline bundle verified and loaded successfully.")
 
     comparison_results = {}
