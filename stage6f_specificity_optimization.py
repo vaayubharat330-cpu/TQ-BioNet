@@ -168,6 +168,10 @@ def fit_ensemble_predict_probabilities(
     X_train_sc = scaler.fit_transform(X_train)
     X_eval_sc = scaler.transform(X_eval)
 
+    # Methodological Audit Note on SVM Probability Calibration:
+    # sklearn.svm.SVC(probability=True) uses internal 5-fold cross-validation with Platt scaling.
+    # While outer and inner validation folds are strictly scan-grouped, the internal 5-fold splits
+    # within SVC are candidate-level stratified rather than scan-grouped.
     clf_svm = SVC(C=1.0, kernel="rbf", probability=True, class_weight="balanced", random_state=42)
     clf_svm.fit(X_train_sc, y_train)
     p_svm = clf_svm.predict_proba(X_eval_sc)[:, 1]
@@ -688,6 +692,10 @@ Paired bootstrap across 5,000 resampled scan clusters evaluates whether changes 
 
 ## 7. Scientific Conclusion
 Within the scope of the tested models and operating points, decision threshold adjustment alone does not solve the low-specificity challenge on LNDb without an unacceptable reduction in nodule sensitivity. Isolating the root cause (e.g., whether vascular parenchymal feature representation, scanner protocol shift, or label noise) requires further targeted ablations and feature-family experiments.
+
+## 8. Methodological & Numerical Audit Notes (Stage 6F.2)
+1. **SVM Internal Calibration Limitation**: While the outer folds and inner nested partitions are strictly scan-grouped (preventing scan leakage across folds), `SVC(probability=True)` uses scikit-learn's default internal 5-fold Platt scaling, which is randomly stratified across candidate findings rather than scan-grouped. Future work should consider custom scan-grouped Platt calibrators.
+2. **ARPACK Eigensolver Boundary Behavior**: Feature 29 (`quantum_eigenvalue_9`) exhibits minor variation (~0.12%) exclusively on degenerate constant patches (e.g. uniform air) due to ARPACK's unseeded Lanczos starting vector at truncation rank $k=10$. Crucially, `quantum_eigenvalue_9` is not part of the frozen 15-feature set (which selects only `quantum_eigenvalue_0, 1, 2`), so this behavior does not affect any Stage 6F models.
 """
     summary_path = outputs_dir / "stage6f_summary.md"
     with summary_path.open("w", encoding="utf-8") as f:

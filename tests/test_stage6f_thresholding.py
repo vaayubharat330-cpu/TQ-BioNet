@@ -10,6 +10,7 @@ from stage6f_specificity_optimization import (
     evaluate_true_nested_scan_grouped_validation,
     paired_scan_cluster_threshold_comparison
 )
+import stage6f_specificity_optimization as s6f
 
 
 def test_sweep_thresholds_monotonicity():
@@ -76,6 +77,89 @@ def test_true_nested_scan_grouped_validation_leak_free():
     assert 0.0 <= res["nested_sensitivity"] <= 1.0
     assert 0.0 <= res["nested_specificity"] <= 1.0
     assert res["nested_accuracy"] > 0.5
+
+
+def test_nested_validation_leak_free_recording(monkeypatch):
+    """
+    Explicitly instruments fit_ensemble_predict_probabilities to verify:
+    1. Zero outer-fold rows are passed to any inner training model.
+    2. Zero outer-fold rows are passed to inner threshold selection.
+    3. The outer model is trained strictly using only the two inner folds.
+    4. X_train and X_eval are strictly disjoint on every invocation.
+    """
+    n_per_fold = 15
+    np.random.seed(101)
+    
+    # Embed unique row index in column 0 of X
+    total_samples = 3 * n_per_fold
+    row_ids = np.arange(total_samples, dtype=float)
+    X_mat = np.random.randn(total_samples, 15)
+    X_mat[:, 0] = row_ids
+    y_arr = np.random.randint(0, 2, size=total_samples)
+    
+    fold_names = ["Fold0"] * n_per_fold + ["Fold1"] * n_per_fold + ["Fold2"] * n_per_fold
+    folds_arr = np.array(fold_names)
+
+    # Track calls to fit_ensemble_predict_probabilities
+    recorded_calls = []
+    original_fit = s6f.fit_ensemble_predict_probabilities
+
+    def recording_wrapper(X_train, y_train, X_eval):
+        train_ids = set(X_train[:, 0].astype(int))
+        eval_ids = set(X_eval[:, 0].astype(int))
+        recorded_calls.append({
+            "train_ids": train_ids,
+            "eval_ids": eval_ids,
+            "train_size": len(train_ids),
+            "eval_size": len(eval_ids)
+        })
+        return original_fit(X_train, y_train, X_eval)
+
+    monkeypatch.setattr(s6f, "fit_ensemble_predict_probabilities", recording_wrapper)
+
+    res = evaluate_true_nested_scan_grouped_validation(X_mat, y_arr, folds_arr, criterion="sens_80")
+
+    # There should be exactly 9 calls: 3 outer loops * (2 inner CV calls + 1 outer train call)
+    assert len(recorded_calls) == 9
+
+    fold_id_map = {
+        "Fold0": set(range(0, 15)),
+        "Fold1": set(range(15, 30)),
+        "Fold2": set(range(30, 45))
+    }
+
+    # Verify each outer loop of 3 calls:
+    for loop_idx, outer_fold in enumerate(["Fold0", "Fold1", "Fold2"]):
+        outer_ids = fold_id_map[outer_fold]
+        inner_folds = [f for f in ["Fold0", "Fold1", "Fold2"] if f != outer_fold]
+        inner_ids_A = fold_id_map[inner_folds[0]]
+        inner_ids_B = fold_id_map[inner_folds[1]]
+        all_inner_ids = inner_ids_A | inner_ids_B
+
+        call_inner1 = recorded_calls[loop_idx * 3]
+        call_inner2 = recorded_calls[loop_idx * 3 + 1]
+        call_outer = recorded_calls[loop_idx * 3 + 2]
+
+        # 1. Inner call 1: train on B, eval on A (zero outer ids)
+        assert len(call_inner1["train_ids"] & outer_ids) == 0, f"Outer fold {outer_fold} leaked into inner train 1"
+        assert len(call_inner1["eval_ids"] & outer_ids) == 0, f"Outer fold {outer_fold} leaked into inner eval 1"
+        assert call_inner1["train_ids"] == inner_ids_B
+        assert call_inner1["eval_ids"] == inner_ids_A
+
+        # 2. Inner call 2: train on A, eval on B (zero outer ids)
+        assert len(call_inner2["train_ids"] & outer_ids) == 0, f"Outer fold {outer_fold} leaked into inner train 2"
+        assert len(call_inner2["eval_ids"] & outer_ids) == 0, f"Outer fold {outer_fold} leaked into inner eval 2"
+        assert call_inner2["train_ids"] == inner_ids_A
+        assert call_inner2["eval_ids"] == inner_ids_B
+
+        # 3. Outer call: train on all inner (A+B), eval on outer
+        assert len(call_outer["train_ids"] & outer_ids) == 0, f"Outer fold {outer_fold} leaked into outer train"
+        assert call_outer["train_ids"] == all_inner_ids, "Outer model was not trained strictly on all inner data"
+        assert call_outer["eval_ids"] == outer_ids, "Outer model did not evaluate on outer fold"
+
+        # 4. Strict disjointness on all calls
+        for c in [call_inner1, call_inner2, call_outer]:
+            assert len(c["train_ids"] & c["eval_ids"]) == 0, "Disjointness violated between train and eval"
 
 
 def test_paired_scan_cluster_threshold_comparison_reproducibility():
