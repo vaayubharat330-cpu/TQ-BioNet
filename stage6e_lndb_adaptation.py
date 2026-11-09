@@ -364,6 +364,138 @@ def evaluate_on_fold3(
     }
 
 
+def compute_fold3_conflict_sensitivity(
+    gt_df: pd.DataFrame,
+    groups_test: np.ndarray,
+    coords_test: np.ndarray,
+    raw_labels: np.ndarray,
+    predictions: np.ndarray,
+    probabilities: np.ndarray,
+    agr_test: np.ndarray
+) -> Dict[str, Any]:
+    """
+    Secondary, label-sensitivity-only analysis on Fold 3.
+
+    Keeps the original finding-level predictions fixed. For exact duplicate
+    coordinates with conflicting binary labels, all rows at that physical
+    location are represented once using the highest AgrLevel row (then larger
+    Volume as deterministic tie-break). Non-conflicting rows are unchanged.
+    This is not a retrained model and not a replacement for primary metrics.
+    """
+    test_df = pd.DataFrame({
+        "seriesuid": groups_test.astype(str),
+        "x": coords_test[:, 0],
+        "y": coords_test[:, 1],
+        "z": coords_test[:, 2],
+        "raw_label": raw_labels.astype(int),
+        "prediction": predictions.astype(int),
+        "probability": probabilities.astype(float),
+        "agr_level": agr_test.astype(int)
+    })
+    # Carry the ground-truth row's volume for transparent tie-breaking.
+    gt_keys = gt_df.copy()
+    gt_keys["seriesuid"] = gt_keys["LNDbID"].map(lambda v: f"LNDb-{int(v):04d}")
+    key_cols = ["seriesuid", "x", "y", "z"]
+    test_df = test_df.merge(
+        gt_keys[key_cols + ["Volume", "FindingID"]],
+        on=key_cols, how="left", validate="one_to_one"
+    )
+    if test_df["FindingID"].isna().any():
+        raise ValueError("Fold 3 predictions failed to join back to ground-truth finding rows.")
+
+    rows = []
+    conflict_groups = 0
+    conflict_raw_rows = 0
+    for _, group in test_df.groupby(key_cols, sort=False, dropna=False):
+        has_conflict = group["raw_label"].nunique() > 1
+        if has_conflict:
+            conflict_groups += 1
+            conflict_raw_rows += len(group)
+            chosen = group.sort_values(
+                ["agr_level", "Volume", "FindingID"],
+                ascending=[False, False, True],
+                kind="mergesort"
+            ).iloc[0]
+        else:
+            # Keep all distinct finding rows where labels agree. Exact duplicate
+            # same-label rows remain individual observations in this sensitivity
+            # analysis unless they are part of a binary conflict.
+            rows.extend(group.to_dict("records"))
+            continue
+        rows.append(chosen.to_dict())
+
+    resolved = pd.DataFrame(rows)
+    yr = resolved["raw_label"].to_numpy(dtype=int)
+    yp = resolved["prediction"].to_numpy(dtype=int)
+    pp = resolved["probability"].to_numpy(dtype=float)
+    tn, fp, fn, tp = confusion_matrix(yr, yp, labels=[0, 1]).ravel()
+    return {
+        "method": (
+            "Secondary fixed-prediction sensitivity analysis: for each exact "
+            "same-scan physical coordinate with conflicting Nodule labels, "
+            "retain the row with highest AgrLevel, then largest Volume, then "
+            "smallest FindingID. No model retraining or probability changes."
+        ),
+        "primary_rows": int(len(test_df)),
+        "sensitivity_rows": int(len(resolved)),
+        "conflicting_coordinate_groups_fold3": int(conflict_groups),
+        "raw_rows_in_conflicting_groups_fold3": int(conflict_raw_rows),
+        "removed_rows_due_to_conflict_collapse": int(len(test_df) - len(resolved)),
+        "accuracy": float(accuracy_score(yr, yp)),
+        "balanced_accuracy": float(balanced_accuracy_score(yr, yp)),
+        "sensitivity": float(recall_score(yr, yp, zero_division=0)),
+        "specificity": float(tn / (tn + fp)) if (tn + fp) else 0.0,
+        "precision": float(precision_score(yr, yp, zero_division=0)),
+        "f1": float(f1_score(yr, yp, zero_division=0)),
+        "auc_roc": float(roc_auc_score(yr, pp)) if len(np.unique(yr)) > 1 else None,
+        "average_precision": float(average_precision_score(yr, pp)) if len(np.unique(yr)) > 1 else None,
+        "brier_score": float(brier_score_loss(yr, pp)),
+        "confusion_matrix": {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)},
+        "explicit_warning": (
+            "This changes the evaluation unit from finding rows to coordinate groups "
+            "only for conflicting coordinates. It is sensitivity analysis, not an "
+            "adjudicated ground truth or the primary Fold 3 estimate."
+        )
+    }
+
+
+def paired_scan_cluster_baseline_comparison(
+    y_true: np.ndarray,
+    model_pred: np.ndarray,
+    group_ids: np.ndarray,
+    n_bootstrap: int = 5000,
+    seed: int = 42
+) -> Dict[str, Any]:
+    """Paired scan-cluster bootstrap for accuracy difference vs always-positive baseline."""
+    rng = np.random.default_rng(seed)
+    unique_groups = np.unique(group_ids.astype(str))
+    group_indices = {g: np.flatnonzero(group_ids.astype(str) == g) for g in unique_groups}
+    delta = []
+    observed_model = accuracy_score(y_true, model_pred)
+    observed_baseline = accuracy_score(y_true, np.ones_like(y_true, dtype=int))
+    for _ in range(n_bootstrap):
+        sampled = rng.choice(unique_groups, size=len(unique_groups), replace=True)
+        idx = np.concatenate([group_indices[g] for g in sampled])
+        if len(idx):
+            baseline = np.ones(len(idx), dtype=int)
+            delta.append(accuracy_score(y_true[idx], model_pred[idx]) -
+                         accuracy_score(y_true[idx], baseline))
+    ci = np.quantile(np.asarray(delta), [0.025, 0.975]).tolist()
+    return {
+        "comparison": "adapted ensemble accuracy minus always-positive baseline accuracy",
+        "observed_accuracy_difference": float(observed_model - observed_baseline),
+        "scan_cluster_bootstrap_95ci": [float(ci[0]), float(ci[1])],
+        "bootstrap_replicates": int(len(delta)),
+        "unique_scan_clusters": int(len(unique_groups)),
+        "seed": int(seed),
+        "interpretation": (
+            "Paired resampling: each sampled scan contributes the same findings to "
+            "both classifiers. CI above zero supports higher accuracy than the "
+            "majority baseline under this scan-cluster resampling design."
+        )
+    }
+
+
 def run_stage6e():
     print("======================================================================")
     print("   TQ-BioNet Stage 6E: LNDb-Specific Development & Grouped Evaluation  ")
