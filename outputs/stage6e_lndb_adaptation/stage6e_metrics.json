@@ -1,6 +1,6 @@
 {
   "stage": "Stage 6E - LNDb Adaptation and Grouped Evaluation",
-  "date_utc": "2026-11-09 14:23:20",
+  "date_utc": "2026-11-09 14:35:50",
   "partitions": {
     "development_folds": [
       "Fold0",
@@ -15,8 +15,47 @@
     "scan_overlap": 0
   },
   "conflicting_coordinates_audit": {
-    "conflict_count": 12,
-    "audit_file": "conflicting_coordinates_audit.csv"
+    "conflict_count": 6,
+    "conflicting_rows": 12,
+    "audit_file": "conflicting_coordinates_audit.csv",
+    "fold3_fixed_prediction_sensitivity": {
+      "method": "Secondary fixed-prediction sensitivity analysis: for each exact same-scan physical coordinate with conflicting Nodule labels, retain the row with highest AgrLevel, then largest Volume, then smallest FindingID. No model retraining or probability changes.",
+      "primary_rows": 320,
+      "sensitivity_rows": 317,
+      "positive_count_after_representative_selection": 191,
+      "negative_count_after_representative_selection": 126,
+      "conflicting_coordinate_groups_fold3": 3,
+      "raw_rows_in_conflicting_groups_fold3": 6,
+      "removed_rows_due_to_conflict_collapse": 3,
+      "accuracy": 0.6908517350157729,
+      "balanced_accuracy": 0.6543256045873846,
+      "sensitivity": 0.8324607329842932,
+      "specificity": 0.47619047619047616,
+      "precision": 0.7066666666666667,
+      "f1": 0.7644230769230769,
+      "auc_roc": 0.6934056345051108,
+      "average_precision": 0.7743966375405061,
+      "brier_score": 0.21414119700650477,
+      "confusion_matrix": {
+        "tn": 60,
+        "fp": 66,
+        "fn": 32,
+        "tp": 159
+      },
+      "explicit_warning": "This changes the evaluation unit from finding rows to coordinate groups only for conflicting coordinates. It is sensitivity analysis, not an adjudicated ground truth or the primary Fold 3 estimate."
+    }
+  },
+  "paired_scan_cluster_baseline_comparison": {
+    "comparison": "adapted ensemble accuracy minus always-positive baseline accuracy",
+    "observed_accuracy_difference": 0.09062499999999996,
+    "scan_cluster_bootstrap_95ci": [
+      0.022651894769808913,
+      0.1636907409761058
+    ],
+    "bootstrap_replicates": 5000,
+    "unique_scan_clusters": 58,
+    "seed": 42,
+    "interpretation": "Paired resampling: each sampled scan contributes the same findings to both classifiers. CI above zero supports higher accuracy than the majority baseline under this scan-cluster resampling design."
   },
   "development_cross_validation_results": {
     "Majority Baseline": {

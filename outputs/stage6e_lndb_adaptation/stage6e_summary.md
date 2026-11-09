@@ -43,3 +43,54 @@ This experiment evaluates scan-grouped development and adaptation on LNDb using 
 - **AgrLevel 1** (1-reader nodules, N=133): Accuracy = 81.20%
 - **AgrLevel 2** (2-reader consensus, N=47): Accuracy = 87.23%
 - **AgrLevel 3** (3-reader unanimous, N=11): Accuracy = 90.91%
+
+
+## Stage 6E.1 Audit Addendum
+
+### Feature Cache Alignment
+The runner now verifies every cache row against the exact ordered ground-truth CSV rows:
+scan ID, binary label, physical coordinates (absolute tolerance 1e-7 mm), and AgrLevel.
+A mismatch stops execution before splitting, fitting, or evaluation.
+
+### Fold 3 Conflict Sensitivity (Fixed Predictions)
+This is a secondary sensitivity analysis only. The original finding-level Fold 3
+metrics above remain the primary evaluation. For exact same-scan coordinates with
+conflicting binary labels, one representative row is retained by highest AgrLevel,
+then largest Volume, then smallest FindingID. Predictions/probabilities remain those
+from the original model; no model retraining or test-time threshold changes occur.
+
+- Primary Fold 3 findings: 320
+- Sensitivity-analysis rows: 317
+- Conflicting coordinate groups in Fold 3: 3
+- Rows in those conflicting groups: 6
+- Sensitivity analysis accuracy: 0.6909
+- Sensitivity analysis balanced accuracy: 0.6543
+- Sensitivity analysis sensitivity/specificity: 0.8325 / 0.4762
+- Sensitivity analysis ROC-AUC: 0.6934056345051108
+
+This is not an adjudicated ground truth. It changes the unit for affected coordinates
+and must not be presented as the primary result.
+
+### Paired Scan-Cluster Comparison vs Always-Positive Baseline
+- Accuracy difference (adapted minus baseline): 0.0906
+- Paired scan-cluster bootstrap 95% CI: [0.0227, 0.1637]
+- Bootstrap replicates: 5000
+- Scan clusters: 58
+
+### Fold 3 Conflict Sensitivity Analysis (Secondary; Predictions Fixed)
+- Primary finding rows: 320
+- Rows after representative selection: 317
+- Conflicting coordinate groups: 3
+- Rows collapsed from conflicting groups: 3
+- Sensitivity-analysis accuracy: 0.6909
+- Sensitivity-analysis balanced accuracy: 0.6543
+- Sensitivity-analysis sensitivity / specificity: 0.8325 / 0.4762
+- Sensitivity-analysis ROC-AUC: 0.6934056345051108
+- Sensitivity-analysis class counts: 191 positive / 126 negative
+
+This secondary analysis changes the unit only at contradictory exact-coordinate groups. It is not an adjudicated ground truth and does not replace the primary finding-level evaluation.
+- Bootstrap replicates: 5000
+- Scan clusters: 58
+
+This paired interval resamples scans and evaluates both classifiers on the same
+resampled findings, accounting for within-scan clustering.

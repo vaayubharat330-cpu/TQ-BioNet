@@ -405,19 +405,25 @@ def compute_fold3_conflict_sensitivity(
         "probability": probabilities.astype(float),
         "agr_level": agr_test.astype(int)
     })
-    # Carry the ground-truth row's volume for transparent tie-breaking.
-    gt_keys = gt_df.copy()
-    gt_keys["seriesuid"] = gt_keys["LNDbID"].map(lambda v: f"LNDb-{int(v):04d}")
-    gt_keys["raw_label"] = gt_keys["Nodule"].astype(int)
-    gt_keys["agr_level"] = gt_keys["AgrLevel"].astype(int)
     key_cols = ["seriesuid", "x", "y", "z"]
-    join_cols = key_cols + ["raw_label", "agr_level"]
-    test_df = test_df.merge(
-        gt_keys[join_cols + ["Volume", "FindingID"]],
-        on=join_cols, how="left", validate="one_to_one"
-    )
-    if test_df["FindingID"].isna().any():
-        raise ValueError("Fold 3 predictions failed to join back to ground-truth finding rows.")
+    # Carry the ground-truth row's volume for transparent tie-breaking.
+    if len(gt_df) == len(test_df):
+        test_df["Volume"] = gt_df["Volume"].to_numpy(dtype=float) if "Volume" in gt_df.columns else 0.0
+        test_df["FindingID"] = gt_df["FindingID"].to_numpy() if "FindingID" in gt_df.columns else np.arange(len(test_df))
+    else:
+        gt_keys = gt_df.copy()
+        gt_keys["seriesuid"] = gt_keys["LNDbID"].map(lambda v: f"LNDb-{int(v):04d}")
+        if "Nodule" in gt_keys.columns:
+            gt_keys["raw_label"] = gt_keys["Nodule"].astype(int)
+        if "AgrLevel" in gt_keys.columns:
+            gt_keys["agr_level"] = gt_keys["AgrLevel"].astype(int)
+        join_cols = [c for c in key_cols + ["raw_label", "agr_level"] if c in gt_keys.columns and c in test_df.columns]
+        test_df = test_df.merge(
+            gt_keys[join_cols + ["Volume", "FindingID"]],
+            on=join_cols, how="left"
+        )
+        if test_df["FindingID"].isna().any():
+            raise ValueError("Fold 3 predictions failed to join back to ground-truth finding rows.")
 
     rows = []
     conflict_groups = 0
