@@ -454,6 +454,8 @@ def compute_fold3_conflict_sensitivity(
         ),
         "primary_rows": int(len(test_df)),
         "sensitivity_rows": int(len(resolved)),
+        "positive_count_after_representative_selection": int(np.sum(yr == 1)),
+        "negative_count_after_representative_selection": int(np.sum(yr == 0)),
         "conflicting_coordinate_groups_fold3": int(conflict_groups),
         "raw_rows_in_conflicting_groups_fold3": int(conflict_raw_rows),
         "removed_rows_due_to_conflict_collapse": int(len(test_df) - len(resolved)),
