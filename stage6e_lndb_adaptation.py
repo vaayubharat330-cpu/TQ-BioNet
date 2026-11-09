@@ -164,6 +164,16 @@ def load_lndb_features_and_folds(
     if "Unknown" in sample_folds:
         raise ValueError(f"Some scans could not be mapped to official folds: {np.unique(groups[sample_folds == 'Unknown'])}")
 
+    # Audit the official fold definition itself: every scan appears exactly once.
+    assigned = []
+    for fold_name in ["Fold0", "Fold1", "Fold2", "Fold3"]:
+        assigned.extend(folds_df[fold_name].dropna().astype(int).tolist())
+    if len(assigned) != len(set(assigned)):
+        raise ValueError("trainFolds.csv assigns one or more LNDbID scans to multiple folds.")
+    if set(int(v) for v in gt_df["LNDbID"].unique()) - set(assigned):
+        missing = sorted(set(int(v) for v in gt_df["LNDbID"].unique()) - set(assigned))
+        raise ValueError(f"Ground-truth scans missing from trainFolds.csv: {missing}")
+
     return {
         "X": X, "y": y, "groups": groups, "coords": coords,
         "agr_levels": agr_levels, "folds": sample_folds
