@@ -818,6 +818,21 @@ and must not be presented as the primary result.
 - Bootstrap replicates: {paired_baseline_comparison['bootstrap_replicates']}
 - Scan clusters: {paired_baseline_comparison['unique_scan_clusters']}
 
+### Fold 3 Conflict Sensitivity Analysis (Secondary; Predictions Fixed)
+- Primary finding rows: {conflict_sensitivity['primary_rows']}
+- Rows after representative selection: {conflict_sensitivity['sensitivity_rows']}
+- Conflicting coordinate groups: {conflict_sensitivity['conflicting_coordinate_groups_fold3']}
+- Rows collapsed from conflicting groups: {conflict_sensitivity['removed_rows_due_to_conflict_collapse']}
+- Sensitivity-analysis accuracy: {conflict_sensitivity['accuracy']:.4f}
+- Sensitivity-analysis balanced accuracy: {conflict_sensitivity['balanced_accuracy']:.4f}
+- Sensitivity-analysis sensitivity / specificity: {conflict_sensitivity['sensitivity']:.4f} / {conflict_sensitivity['specificity']:.4f}
+- Sensitivity-analysis ROC-AUC: {conflict_sensitivity['auc_roc']}
+- Sensitivity-analysis class counts: {conflict_sensitivity['positive_count_after_representative_selection']} positive / {conflict_sensitivity['negative_count_after_representative_selection']} negative
+
+This secondary analysis changes the unit only at contradictory exact-coordinate groups. It is not an adjudicated ground truth and does not replace the primary finding-level evaluation.
+- Bootstrap replicates: {paired_baseline_comparison['bootstrap_replicates']}
+- Scan clusters: {paired_baseline_comparison['unique_scan_clusters']}
+
 This paired interval resamples scans and evaluates both classifiers on the same
 resampled findings, accounting for within-scan clustering.
 """
