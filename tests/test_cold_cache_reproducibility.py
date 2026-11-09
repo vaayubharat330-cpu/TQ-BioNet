@@ -50,14 +50,30 @@ def test_luna16_rebuilt_cache_integrity():
 
 
 def test_luna16_cold_cache_prediction_reproduction():
-    """Verify that fresh independent validation predictions match the audited 926 candidate cohort."""
+    """Verify that fresh independent validation predictions match the audited 926 candidate cohort and historical predictions."""
     preds_path = OUTPUTS_DIR / "validation_predictions.csv"
+    hist_path = OUTPUTS_DIR / "stage7_validation_audit" / "historical_validation_predictions_baseline.csv"
     assert preds_path.exists(), "validation_predictions.csv missing"
+    assert hist_path.exists(), "historical_validation_predictions_baseline.csv missing"
+
     df = pd.read_csv(preds_path)
+    hist_df = pd.read_csv(hist_path)
 
     assert len(df) == 926
+    assert len(hist_df) == 926
     assert set(df["subset"].unique()) == {6, 7, 8, 9}
     assert (df["predicted_label"].isin([0, 1])).all()
+
+    # Exact prediction alignment against preserved historical predictions
+    np.testing.assert_array_equal(df["seriesuid"].values, hist_df["seriesuid"].values)
+    np.testing.assert_array_equal(df["true_label"].values, hist_df["true_label"].values)
+    np.testing.assert_array_equal(df["predicted_label"].values, hist_df["predicted_label"].values)
+
+    # Probabilities agree within floating point tolerance
+    np.testing.assert_allclose(df["ensemble_prob"].values, hist_df["ensemble_prob"].values, atol=1e-10)
+    np.testing.assert_allclose(df["svm_prob"].values, hist_df["svm_prob"].values, atol=1e-10)
+    np.testing.assert_allclose(df["xgb_prob"].values, hist_df["xgb_prob"].values, atol=1e-10)
+    np.testing.assert_allclose(df["rf_prob"].values, hist_df["rf_prob"].values, atol=1e-10)
 
     # Reconcile confusion matrix
     y_true = df["true_label"].values

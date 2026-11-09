@@ -12,20 +12,22 @@
 This audit certifies the **cold-cache reproducibility** of the TQ-BioNet v3.1 framework across both in-domain validation (**LUNA16 Subsets 6–9**) and external zero-shot clinical validation (**LNDb 1.0 mm** cohort).
 
 To eliminate any risk of lingering state, hidden dependencies, or cached leakage:
-1. **Cache Quarantine**: All historical feature caches were isolated into timestamped backup folders (`cold_cache_backup_20261109_215243`).
-2. **Raw CT Re-Extraction**: Feature matrices, coordinates, and labels were reconstructed directly from the original compressed `.mhd`/`.raw` CT volumes and official annotation CSV files.
-3. **Absolute Model Freeze**: The frozen v3.1 serialized bundle (`outputs/frozen_v3_1_pipeline/`, verified by SHA-256 manifest) was evaluated on the rebuilt feature matrices with zero retraining, fine-tuning, or threshold modification.
+1. **Target Cache Quarantine**: The specific validation feature caches under test (`luna16_data/cache/tq_bionet_v3_1/subset[6-9]` and `D:\LNDb\cache\stage6d\1.0mm`) were moved into timestamped isolation backups (`cold_cache_backup_20261109_215243`). Development cohort caches (Subsets 0–5) and legacy caches (`tq_bionet_v3`, alternate LNDb resolution experiments) were deliberately preserved.
+2. **Raw CT Re-Extraction**: Feature matrices, spatial coordinates, scan IDs, and ground truth labels were reconstructed directly from the original compressed `.mhd`/`.raw` CT volumes and official annotation CSV files.
+3. **Evaluation Protocol Alignment**:
+   - **LUNA16 Independent Validation**: The deterministic pipeline (`run_independent_validation.py`) refitted the classifiers (SVM, XGBoost, Random Forest) on the development cohort (Subsets 0–5) before scoring the freshly rebuilt validation features (Subsets 6–9). There was strictly zero training, fitting, or threshold adjustment on Subsets 6–9.
+   - **LNDb External Validation**: The evaluation (`run_lndb_external_validation.py`) was performed strictly zero-shot using the frozen serialized v3.1 model bundle (`outputs/frozen_v3_1_pipeline/`, verified by SHA-256 against `pipeline_manifest.json`) with zero training, adaptation, calibration, or threshold selection on LNDb.
 4. **End-to-End Replication**: Predictions replicated with **100.0% label identity** across both cohorts (926/926 for LUNA16, 1,219/1,219 for LNDb), with maximum probability deltas $\le 10^{-11}$.
 
 ---
 
 ## 2. Methodology & Quarantine Protocol
 
-| Cohort | Source Scans / Archives | Historical Cache (Quarantined) | Fresh Cold-Cache Extraction Path |
-| :--- | :--- | :--- | :--- |
-| **LUNA16 Subsets 6–9** | `D:\LUNA16\subset[6-9].zip` (CRC-verified) | `luna16_data\cache\cold_cache_backup_20261109_215243\tq_bionet_v3_1\subset[6-9]` | `luna16_data\cache\tq_bionet_v3_1\subset[6-9]` |
-| **LNDb 1.0 mm Cohort** | `D:\LNDb\extracted\LNDb-*.mhd` (229 scans) | `D:\LNDb\cache\cold_cache_backup_20261109_215243\stage6d\1.0mm` | `D:\LNDb\cache\stage6d\1.0mm` |
-| **Model Bundle** | `outputs\frozen_v3_1_pipeline` | N/A (Frozen read-only artifact) | Untouched; SHA-256 verified against manifest |
+| Cohort | Source Scans / Archives | Target Cache (Quarantined) | Fresh Cold-Cache Extraction Path | Evaluation Model State |
+| :--- | :--- | :--- | :--- | :--- |
+| **LUNA16 Subsets 6–9** | `D:\LUNA16\subset[6-9].zip` (CRC-verified) | `luna16_data\cache\cold_cache_backup_20261109_215243\tq_bionet_v3_1\subset[6-9]` | `luna16_data\cache\tq_bionet_v3_1\subset[6-9]` | Refitted deterministically on Dev (Subsets 0–5); zero fit on Subsets 6–9 |
+| **LNDb 1.0 mm Cohort** | `D:\LNDb\extracted\LNDb-*.mhd` (229 scans) | `D:\LNDb\cache\cold_cache_backup_20261109_215243\stage6d\1.0mm` | `D:\LNDb\cache\stage6d\1.0mm` | Strictly frozen v3.1 model bundle; zero LNDb training/adaptation |
+| **Preserved Caches** | Dev `subset[0-5]`, legacy `v3`, LNDb `0.8mm`/`1.25mm` | Deliberately preserved | Untouched | Reference caches retained for development provenance |
 
 ---
 
@@ -42,8 +44,8 @@ Each subset was extracted from decompressed `.mhd`/`.raw` files after archive ve
 | **Subset 9** | `04d26500` | 59 | 210 | 105 / 105 | $4.18 \times 10^{-11}$ | 100% Exact Match |
 | **Total** | — | **236** | **926** | **463 / 463** | $\le 4.31 \times 10^{-11}$ | **100% Exact Match** |
 
-### 3.2 Frozen Evaluation Metrics & Confusion Matrix
-Evaluating the frozen v3.1 model ensemble against the freshly rebuilt LUNA16 validation features yielded:
+### 3.2 Evaluation Metrics & Confusion Matrix
+Evaluating the development-fitted pipeline (Subsets 0–5) against the freshly rebuilt LUNA16 validation features (Subsets 6–9) yielded:
 
 | Metric | Fresh Cold-Cache Result | Historical Audited Baseline | Absolute Delta |
 | :--- | :---: | :---: | :---: |
@@ -57,7 +59,7 @@ Evaluating the frozen v3.1 model ensemble against the freshly rebuilt LUNA16 val
 | **Expected Calibration Error (ECE)** | 0.1057116 | 0.1057116 | $1.67 \times 10^{-16}$ |
 
 - **Confusion Matrix**: $\text{TN} = 420$, $\text{FP} = 43$, $\text{FN} = 84$, $\text{TP} = 379$ (100% identical).
-- **Prediction Alignment**: **926 / 926 (100.0%)** binary predictions identical; maximum ensemble probability delta: $3.43 \times 10^{-12}$.
+- **Prediction Alignment**: **926 / 926 (100.0%)** binary predictions identical against preserved historical predictions (`historical_validation_predictions_baseline.csv`); maximum ensemble probability delta: $1.14 \times 10^{-12}$.
 
 ---
 
@@ -86,7 +88,7 @@ Evaluating the frozen v3.1 pipeline on the fresh LNDb extractions (zero-shot tra
 
 - **Confusion Matrix**: $\text{TN} = 275$, $\text{FP} = 176$, $\text{FN} = 376$, $\text{TP} = 392$ (100% identical).
 - **Prediction Alignment**:
-  - Voting Ensemble: **1,219 / 1,219 (100.0%)** exact match.
+  - Voting Ensemble: **1,219 / 1,219 (100.0%)** exact match against historical baseline.
   - SVM Classifier: **1,219 / 1,219 (100.0%)** exact match.
   - XGBoost Classifier: **1,219 / 1,219 (100.0%)** exact match.
   - Random Forest Classifier: **1,219 / 1,219 (100.0%)** exact match.
@@ -110,21 +112,21 @@ Evaluating the frozen v3.1 pipeline on the fresh LNDb extractions (zero-shot tra
 ## 5. Automated Verification Test Suite
 
 A dedicated regression test file, `tests/test_cold_cache_reproducibility.py`, was authored and incorporated into the project repository. It verifies:
-1. `test_luna16_rebuilt_cache_integrity`: Checks shape and scan counts across Subsets 6–9.
-2. `test_luna16_cold_cache_prediction_reproduction`: Checks 926 prediction match and confusion matrix reconciliation.
-3. `test_lndb_cold_cache_predictions_exact_match`: Re-validates 1,219 prediction matches across all 3 classifiers and ensemble.
-4. `test_lndb_cold_cache_metrics_exact_match`: Re-validates confusion matrix and precision metrics.
+1. `test_luna16_rebuilt_cache_integrity`: Checks array dimensions and scan counts across Subsets 6–9.
+2. `test_luna16_cold_cache_prediction_reproduction`: Checks 926/926 row-by-row prediction identity and probability concordance against preserved historical baseline predictions (`historical_validation_predictions_baseline.csv`), alongside confusion matrix reconciliation.
+3. `test_lndb_cold_cache_predictions_exact_match`: Re-validates 1,219/1,219 row-by-row prediction matches across all 3 classifiers and ensemble against historical Stage 6B outputs.
+4. `test_lndb_cold_cache_metrics_exact_match`: Re-validates confusion matrix and precision metrics against historical JSON.
 5. `test_lndb_agreement_level_stratification_reproducibility`: Re-validates stratification across all 4 agreement tiers.
 
-The complete project test suite now contains **74 passing tests** (69 historical + 5 cold-cache reproducibility).
+The complete project test suite contains **74 passing tests** (69 historical + 5 cold-cache reproducibility).
 
 ---
 
 ## 6. Audit Conclusion & Certification
 
 The cold-cache reproduction audit is **officially certified**:
-1. **Zero Data Leakage / State Contamination**: The feature caches were rebuilt from scratch from raw CT scans; the frozen model bundle performed inference without fine-tuning.
+1. **Target Isolation & Cold Reconstruction**: The target validation feature caches were rebuilt from scratch from raw CT scans. LUNA16 validation subsets were strictly evaluated without test-set fitting, and LNDb was evaluated strictly zero-shot using the frozen model bundle.
 2. **Deterministic Mathematical Stability**: Topological, geometric, and graph Laplacian features are deterministic down to $\sim 10^{-11}$.
 3. **Scientific Credibility Confirmed**:
    - The in-domain candidate classification performance on balanced LUNA16 ($86.29\%$ accuracy, $0.9202$ AUC) is verified from first principles.
-   - The cross-cohort domain shift degradation on unadapted LNDb ($54.72\%$ accuracy, $0.5729$ AUC) is verified as a genuine biological/scanner distribution shift rather than an artifact of implementation.
+   - The cross-cohort performance drop on unadapted LNDb ($54.72\%$ accuracy, $0.5729$ AUC) demonstrates substantial cross-dataset distribution shift; its precise contributing factors (e.g., scanner protocols, acquisition geometry, slice thickness distributions, annotation guidelines, or patient population characteristics) have not been individually isolated.
