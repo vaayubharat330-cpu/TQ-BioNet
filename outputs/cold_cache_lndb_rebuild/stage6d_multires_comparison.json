@@ -1,0 +1,63 @@
+{
+  "1.0mm": {
+    "spacing_xyz_mm": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "patch_size_voxels": 32,
+    "physical_fov_mm": 32.0,
+    "description": "Standard v3.1 baseline isotropic (1.0 mm, 32^3 patch)",
+    "metrics": {
+      "n": 1219,
+      "accuracy": 0.5471698113207547,
+      "accuracy_95ci": [
+        0.5151204909503689,
+        0.5797101449275363
+      ],
+      "sensitivity": 0.5104166666666666,
+      "specificity": 0.6097560975609756,
+      "precision": 0.6901408450704225,
+      "f1": 0.5868263473053892,
+      "f1_95ci": [
+        0.5513442147748638,
+        0.6246336411531901
+      ],
+      "auc_roc": 0.5729051182557281,
+      "auc_roc_95ci": [
+        0.5348984090000328,
+        0.6090776519363258
+      ],
+      "average_precision": 0.6930694798337421,
+      "brier_score": 0.2763430521948109,
+      "confusion_matrix": {
+        "tn": 275,
+        "fp": 176,
+        "fn": 376,
+        "tp": 392
+      },
+      "agreement_stratification": {
+        "0": {
+          "n": 451,
+          "accuracy": 0.6097560975609756,
+          "positive_count": 0
+        },
+        "1": {
+          "n": 547,
+          "accuracy": 0.42047531992687387,
+          "positive_count": 547
+        },
+        "2": {
+          "n": 177,
+          "accuracy": 0.711864406779661,
+          "positive_count": 177
+        },
+        "3": {
+          "n": 44,
+          "accuracy": 0.8181818181818182,
+          "positive_count": 44
+        }
+      }
+    }
+  }
+}

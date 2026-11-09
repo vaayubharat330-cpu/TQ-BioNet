@@ -30,8 +30,8 @@
             0.8132244447124916,
             0.9135009768613328
         ],
-        "brier_score": 0.13181497905512735,
-        "expected_calibration_error": 0.10566311560691717
+        "brier_score": 0.1318149790551574,
+        "expected_calibration_error": 0.105663115606899
     },
     "XGBoost": {
         "accuracy": 0.861904761904762,
@@ -98,8 +98,8 @@
             0.8684781319084006,
             0.9487614584706682
         ],
-        "brier_score": 0.11792242841848846,
-        "expected_calibration_error": 0.10390594356692666
+        "brier_score": 0.11792242841850048,
+        "expected_calibration_error": 0.10390594356693342
     },
     "confusion_matrix": {
         "tn": 97,

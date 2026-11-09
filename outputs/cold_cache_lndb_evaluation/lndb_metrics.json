@@ -1,0 +1,225 @@
+{
+  "dataset": "LNDb official public train/validation cohort",
+  "task": "candidate/finding-level binary nodule classification",
+  "n_evaluated": 1219,
+  "n_positive": 768,
+  "n_negative": 451,
+  "n_scans": 229,
+  "models": {
+    "SVM": {
+      "n": 1219,
+      "accuracy": 0.5356849876948319,
+      "accuracy_wilson_95ci": [
+        0.5076194226328282,
+        0.563526341462865
+      ],
+      "sensitivity": 0.5182291666666666,
+      "sensitivity_wilson_95ci": [
+        0.4828871805836771,
+        0.5533896928058889
+      ],
+      "specificity": 0.565410199556541,
+      "specificity_wilson_95ci": [
+        0.5192981863331638,
+        0.6104173014322474
+      ],
+      "precision": 0.67003367003367,
+      "precision_wilson_95ci": [
+        0.6312335027110902,
+        0.706648638645416
+      ],
+      "f1": 0.5844346549192364,
+      "auc_roc": 0.554317950849963,
+      "average_precision": 0.6772504339716102,
+      "brier_score": 0.3141078186236539,
+      "confusion_matrix": {
+        "tn": 255,
+        "fp": 196,
+        "fn": 370,
+        "tp": 398
+      },
+      "decision_threshold": 0.5,
+      "accuracy_scan_cluster_bootstrap_95ci": [
+        0.5048695397897741,
+        0.5663157627958668
+      ],
+      "f1_scan_cluster_bootstrap_95ci": [
+        0.5470184436787893,
+        0.6204442486785804
+      ],
+      "auc_roc_scan_cluster_bootstrap_95ci": [
+        0.5161020789363502,
+        0.5895861502997093
+      ]
+    },
+    "XGBoost": {
+      "n": 1219,
+      "accuracy": 0.527481542247744,
+      "accuracy_wilson_95ci": [
+        0.4994127372521806,
+        0.5553776787755371
+      ],
+      "sensitivity": 0.4895833333333333,
+      "sensitivity_wilson_95ci": [
+        0.4543682060131309,
+        0.5249021520499743
+      ],
+      "specificity": 0.5920177383592018,
+      "specificity_wilson_95ci": [
+        0.5460676242596285,
+        0.6364134856476447
+      ],
+      "precision": 0.6714285714285714,
+      "precision_wilson_95ci": [
+        0.6314733049063027,
+        0.7090478627407809
+      ],
+      "f1": 0.5662650602409639,
+      "auc_roc": 0.5636014296932743,
+      "average_precision": 0.6874029821186053,
+      "brier_score": 0.2905321419239044,
+      "confusion_matrix": {
+        "tn": 267,
+        "fp": 184,
+        "fn": 392,
+        "tp": 376
+      },
+      "decision_threshold": 0.5,
+      "accuracy_scan_cluster_bootstrap_95ci": [
+        0.4962577884757416,
+        0.5609304142441861
+      ],
+      "f1_scan_cluster_bootstrap_95ci": [
+        0.5293516725432035,
+        0.6032238684497088
+      ],
+      "auc_roc_scan_cluster_bootstrap_95ci": [
+        0.5248293304801639,
+        0.5997514693576217
+      ]
+    },
+    "Random Forest": {
+      "n": 1219,
+      "accuracy": 0.5463494667760459,
+      "accuracy_wilson_95ci": [
+        0.5182994475212829,
+        0.5741082690627782
+      ],
+      "sensitivity": 0.4895833333333333,
+      "sensitivity_wilson_95ci": [
+        0.4543682060131309,
+        0.5249021520499743
+      ],
+      "specificity": 0.6430155210643016,
+      "specificity_wilson_95ci": [
+        0.5977597575476339,
+        0.6858554614648751
+      ],
+      "precision": 0.7001862197392924,
+      "precision_wilson_95ci": [
+        0.6601233418806751,
+        0.7374052505944599
+      ],
+      "f1": 0.5762452107279693,
+      "auc_roc": 0.6049490715077606,
+      "average_precision": 0.70954994507397,
+      "brier_score": 0.2586366417784441,
+      "confusion_matrix": {
+        "tn": 290,
+        "fp": 161,
+        "fn": 392,
+        "tp": 376
+      },
+      "decision_threshold": 0.5,
+      "accuracy_scan_cluster_bootstrap_95ci": [
+        0.5165452767193122,
+        0.5765993265993266
+      ],
+      "f1_scan_cluster_bootstrap_95ci": [
+        0.5398850800822785,
+        0.6131400540605609
+      ],
+      "auc_roc_scan_cluster_bootstrap_95ci": [
+        0.5674180850611941,
+        0.6420781991836373
+      ]
+    },
+    "Ensemble": {
+      "n": 1219,
+      "accuracy": 0.5471698113207547,
+      "accuracy_wilson_95ci": [
+        0.5191215202257956,
+        0.5749217311650633
+      ],
+      "sensitivity": 0.5104166666666666,
+      "sensitivity_wilson_95ci": [
+        0.4750978479500257,
+        0.5456317939868691
+      ],
+      "specificity": 0.6097560975609756,
+      "specificity_wilson_95ci": [
+        0.5639891632973144,
+        0.653669028037867
+      ],
+      "precision": 0.6901408450704225,
+      "precision_wilson_95ci": [
+        0.65093935162272,
+        0.7267876273169023
+      ],
+      "f1": 0.5868263473053892,
+      "auc_roc": 0.5729195537694013,
+      "average_precision": 0.6934069127325198,
+      "brier_score": 0.2763430521948477,
+      "confusion_matrix": {
+        "tn": 275,
+        "fp": 176,
+        "fn": 376,
+        "tp": 392
+      },
+      "decision_threshold": 0.5,
+      "accuracy_scan_cluster_bootstrap_95ci": [
+        0.5151204909503689,
+        0.5797101449275363
+      ],
+      "f1_scan_cluster_bootstrap_95ci": [
+        0.5513442147748638,
+        0.6246336411531901
+      ],
+      "auc_roc_scan_cluster_bootstrap_95ci": [
+        0.5350132813631807,
+        0.6091218769033812
+      ]
+    }
+  },
+  "agreement_level_stratification": {
+    "0": {
+      "n": 451,
+      "positive": 0,
+      "negative": 451,
+      "ensemble_auc_roc": null,
+      "ensemble_accuracy": 0.6097560975609756
+    },
+    "1": {
+      "n": 547,
+      "positive": 547,
+      "negative": 0,
+      "ensemble_auc_roc": null,
+      "ensemble_accuracy": 0.42047531992687387
+    },
+    "2": {
+      "n": 177,
+      "positive": 177,
+      "negative": 0,
+      "ensemble_auc_roc": null,
+      "ensemble_accuracy": 0.711864406779661
+    },
+    "3": {
+      "n": 44,
+      "positive": 44,
+      "negative": 0,
+      "ensemble_auc_roc": null,
+      "ensemble_accuracy": 0.8181818181818182
+    }
+  },
+  "excluded_findings": 0
+}

@@ -1,15 +1,15 @@
 # TQ-BioNet v3.1 Independent Validation Summary
 
-This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the independent evaluation cohort (SeriesUID-separated Subsets 6-9). Note: SeriesUID separation establishes scan-level independence, which is conditional on confirming patient-level separation where scans originate from distinct individuals.
+This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the independent evaluation cohort (SeriesUID-separated Subsets 6–9). Note: SeriesUID separation establishes scan-level independence, which is conditional on confirming patient-level separation where scans originate from distinct individuals.
 
 ## Validation Scope
-- **Validation Date**: 2026-11-08 19:05:35 UTC
-- **Development Cohort**: Subsets 0-5 (1446 samples) - Used for classifier training
-- **Validation Cohort**: Subsets 6-9 (926 samples) - Used for validation testing
+- **Validation Date**: 2026-11-09 16:45:26 UTC
+- **Development Cohort**: Subsets 0–5 (1446 samples) - Used for classifier training
+- **Validation Cohort**: Subsets 6–9 (926 samples) - Used for validation testing
 - **Feature Pipeline Version**: v3.1 (Isotropic 1.0mm, Local Z-Score IQR Preprocessing)
 - **Features Pruned**: 15 key biophysical/topological features
 
-## Independent Validation Cohort Metrics (Combined Subsets 6-9)
+## Independent Validation Cohort Metrics (Combined Subsets 6–9)
 
 | Metric [CI Type] | Support Vector Machine (SVM) | XGBoost Classifier | Voting Ensemble |
 | :--- | :--- | :--- | :--- |
