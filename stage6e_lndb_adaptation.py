@@ -82,16 +82,19 @@ def audit_label_conflicts(gt_df: pd.DataFrame, output_dir: Path) -> Tuple[pd.Dat
     conflict_rows.to_csv(conflict_path, index=False)
     print(f"   [AUDIT] Found {len(conflict_keys)} conflicting coordinate locations ({len(conflict_rows)} total rows). Saved to {conflict_path.name}.")
 
-    # Build sensitivity-resolved dataset: for conflicting locations, adopt consensus (Nodule=1 if AgrLevel>=1 else 0)
+    # Build a secondary sensitivity dataset without collapsing same-label duplicates.
+    # Only groups with conflicting binary labels are reduced to a representative row.
     resolved_rows = []
-    for (scan_id, x, y, z), group in gt_df.groupby(["LNDbID", "x", "y", "z"], sort=False):
-        if len(group) == 1:
-            resolved_rows.append(group.iloc[0].to_dict())
+    for _, group in gt_df.groupby(["LNDbID", "x", "y", "z"], sort=False):
+        if group["Nodule"].nunique() > 1:
+            best_row = group.sort_values(
+                by=["AgrLevel", "Volume", "FindingID"],
+                ascending=[False, False, True],
+                kind="mergesort"
+            ).iloc[0]
+            resolved_rows.append(best_row.to_dict())
         else:
-            # Aggregate: pick highest agreement level row
-            best_row = group.sort_values(by=["AgrLevel", "Volume"], ascending=[False, False]).iloc[0].to_dict()
-            resolved_rows.append(best_row)
-
+            resolved_rows.extend(group.to_dict("records"))
     resolved_df = pd.DataFrame(resolved_rows)
     return conflict_rows, resolved_df
 
