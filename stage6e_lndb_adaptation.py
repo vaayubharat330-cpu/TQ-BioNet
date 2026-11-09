@@ -621,6 +621,27 @@ def run_stage6e():
     preds_path = outputs_dir / "fold3_predictions.csv"
     preds_df.to_csv(preds_path, index=False)
 
+    # Stage 6E.1 audit: fixed-prediction sensitivity for Fold 3 label conflicts
+    # and paired scan-cluster comparison against the always-positive baseline.
+    conflict_sensitivity = compute_fold3_conflict_sensitivity(
+        gt_df=gt_df,
+        groups_test=groups_test,
+        coords_test=coords_test,
+        raw_labels=y_test,
+        predictions=eval_fold3_15["predictions"],
+        probabilities=eval_fold3_15["probabilities"],
+        agr_test=agr_test
+    )
+    paired_baseline_comparison = paired_scan_cluster_baseline_comparison(
+        y_true=y_test,
+        model_pred=eval_fold3_15["predictions"],
+        group_ids=groups_test
+    )
+    with (outputs_dir / "fold3_conflict_sensitivity.json").open("w", encoding="utf-8") as f:
+        json.dump(conflict_sensitivity, f, indent=2)
+    with (outputs_dir / "fold3_paired_baseline_comparison.json").open("w", encoding="utf-8") as f:
+        json.dump(paired_baseline_comparison, f, indent=2)
+
     # 6. Generate ROC and PR Curves comparing Zero-Shot vs Adapted on Fold 3
     plt.figure(figsize=(7, 6))
     fpr_zs, tpr_zs, _ = roc_curve(y_test, f3_f_prob)
@@ -670,9 +691,12 @@ def run_stage6e():
             "scan_overlap": 0
         },
         "conflicting_coordinates_audit": {
-            "conflict_count": len(conflict_df),
-            "audit_file": "conflicting_coordinates_audit.csv"
+            "conflict_count": int(conflict_df.groupby(["LNDbID", "x", "y", "z"]).ngroups),
+            "conflicting_rows": int(len(conflict_df)),
+            "audit_file": "conflicting_coordinates_audit.csv",
+            "fold3_fixed_prediction_sensitivity": conflict_sensitivity
         },
+        "paired_scan_cluster_baseline_comparison": paired_baseline_comparison,
         "development_cross_validation_results": {
             k: {kk: vv for kk, vv in v.items() if kk not in ["oof_probs", "oof_preds"]}
             for k, v in cv_results.items()
