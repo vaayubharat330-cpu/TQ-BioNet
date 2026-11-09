@@ -91,18 +91,33 @@ def extract_cohort_features_at_spacing(
         coords = np.load(coords_path)
         agr_levels = np.load(agr_path)
 
-        # Check hash integrity
+        # Validate experiment identity, array dimensions, row alignment, and every array hash.
         hashes = meta.get("array_hashes", {})
-        if (hashes.get("X") == get_array_sha256(X) and
-            hashes.get("y") == get_array_sha256(y) and
-            hashes.get("groups") == get_array_sha256(groups)):
-            print(f"   [{spacing_key}] Cache integrity verified ({len(X)} samples).")
+        expected_rows = len(ground_truth_df)
+        cache_ok = (
+            meta.get("spacing_key") == spacing_key and
+            tuple(meta.get("target_spacing_xyz_mm", [])) == tuple(target_spacing) and
+            meta.get("patch_size_voxels") == patch_size and
+            meta.get("physical_fov_mm") == physical_fov and
+            meta.get("sample_count") == expected_rows and
+            X.ndim == 2 and X.shape == (expected_rows, 31) and
+            y.shape == (expected_rows,) and
+            groups.shape == (expected_rows,) and
+            coords.shape == (expected_rows, 3) and
+            agr_levels.shape == (expected_rows,) and
+            all(hashes.get(name) == get_array_sha256(arr) for name, arr in (
+                ("X", X), ("y", y), ("groups", groups),
+                ("coords", coords), ("agr_levels", agr_levels)
+            ))
+        )
+        if cache_ok:
+            print(f"   [{spacing_key}] Cache integrity verified ({len(X)} aligned samples; all five arrays).")
             return {
                 "X": X, "y": y, "groups": groups, "coords": coords,
                 "agr_levels": agr_levels, "metadata": meta
             }
         else:
-            print(f"   [{spacing_key}] Cache hash mismatch. Rebuilding...")
+            print(f"   [{spacing_key}] Cache identity/shape/hash validation failed. Rebuilding...")
 
     print(f"\n[EXTRACTION] Processing cohort at {spacing_key} (spacing={target_spacing}, patch={patch_size}^3, FOV={physical_fov} mm)...")
     start_time = time.time()
@@ -159,6 +174,21 @@ def extract_cohort_features_at_spacing(
 
         if processed_scans % progress_every == 0 or processed_scans == total_scans:
             print(f"   [{spacing_key}] Processed {processed_scans}/{total_scans} scans ({len(feature_list)} findings extracted)...", flush=True)
+
+    if extraction_errors:
+        error_path = spacing_cache_dir / "extraction_errors.txt"
+        error_path.write_text("\n".join(extraction_errors) + "\n", encoding="utf-8")
+        raise RuntimeError(
+            f"[{spacing_key}] Extraction incomplete: {len(extraction_errors)} errors. "
+            f"Expected {len(ground_truth_df)} findings; extracted {len(feature_list)}. "
+            f"See {error_path}. Partial cohort will not be cached or evaluated."
+        )
+
+    if len(feature_list) != len(ground_truth_df):
+        raise RuntimeError(
+            f"[{spacing_key}] Finding count mismatch: expected {len(ground_truth_df)}, "
+            f"extracted {len(feature_list)}. Refusing to cache/evaluate."
+        )
 
     X = np.asarray(feature_list, dtype=np.float64)
     y = np.asarray(label_list, dtype=np.int64)
