@@ -766,6 +766,43 @@ This experiment evaluates scan-grouped development and adaptation on LNDb using 
 - **AgrLevel 2** (2-reader consensus, N={eval_fold3_15['agreement_stratification']['2']['n']}): Accuracy = {eval_fold3_15['agreement_stratification']['2']['accuracy']*100:.2f}%
 - **AgrLevel 3** (3-reader unanimous, N={eval_fold3_15['agreement_stratification']['3']['n']}): Accuracy = {eval_fold3_15['agreement_stratification']['3']['accuracy']*100:.2f}%
 """
+    summary_md += f"""
+
+## Stage 6E.1 Audit Addendum
+
+### Feature Cache Alignment
+The runner now verifies every cache row against the exact ordered ground-truth CSV rows:
+scan ID, binary label, physical coordinates (absolute tolerance 1e-7 mm), and AgrLevel.
+A mismatch stops execution before splitting, fitting, or evaluation.
+
+### Fold 3 Conflict Sensitivity (Fixed Predictions)
+This is a secondary sensitivity analysis only. The original finding-level Fold 3
+metrics above remain the primary evaluation. For exact same-scan coordinates with
+conflicting binary labels, one representative row is retained by highest AgrLevel,
+then largest Volume, then smallest FindingID. Predictions/probabilities remain those
+from the original model; no model retraining or test-time threshold changes occur.
+
+- Primary Fold 3 findings: {conflict_sensitivity['primary_rows']}
+- Sensitivity-analysis rows: {conflict_sensitivity['sensitivity_rows']}
+- Conflicting coordinate groups in Fold 3: {conflict_sensitivity['conflicting_coordinate_groups_fold3']}
+- Rows in those conflicting groups: {conflict_sensitivity['raw_rows_in_conflicting_groups_fold3']}
+- Sensitivity analysis accuracy: {conflict_sensitivity['accuracy']:.4f}
+- Sensitivity analysis balanced accuracy: {conflict_sensitivity['balanced_accuracy']:.4f}
+- Sensitivity analysis sensitivity/specificity: {conflict_sensitivity['sensitivity']:.4f} / {conflict_sensitivity['specificity']:.4f}
+- Sensitivity analysis ROC-AUC: {conflict_sensitivity['auc_roc'] if conflict_sensitivity['auc_roc'] is not None else 'undefined'}
+
+This is not an adjudicated ground truth. It changes the unit for affected coordinates
+and must not be presented as the primary result.
+
+### Paired Scan-Cluster Comparison vs Always-Positive Baseline
+- Accuracy difference (adapted minus baseline): {paired_baseline_comparison['observed_accuracy_difference']:.4f}
+- Paired scan-cluster bootstrap 95% CI: [{paired_baseline_comparison['scan_cluster_bootstrap_95ci'][0]:.4f}, {paired_baseline_comparison['scan_cluster_bootstrap_95ci'][1]:.4f}]
+- Bootstrap replicates: {paired_baseline_comparison['bootstrap_replicates']}
+- Scan clusters: {paired_baseline_comparison['unique_scan_clusters']}
+
+This paired interval resamples scans and evaluates both classifiers on the same
+resampled findings, accounting for within-scan clustering.
+"""
     summary_path = outputs_dir / "stage6e_summary.md"
     with summary_path.open("w", encoding="utf-8") as f:
         f.write(summary_md)
