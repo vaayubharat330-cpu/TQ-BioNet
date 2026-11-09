@@ -117,6 +117,38 @@ def load_lndb_features_and_folds(
     coords = np.load(coords_path)
     agr_levels = np.load(agr_path)
 
+    # Strict row-wise alignment audit: cache rows must preserve the official
+    # trainNodules_gt.csv order and values used during Stage 6D extraction.
+    expected_n = len(gt_df)
+    if (X.ndim != 2 or X.shape != (expected_n, 31) or
+            y.shape != (expected_n,) or groups.shape != (expected_n,) or
+            coords.shape != (expected_n, 3) or agr_levels.shape != (expected_n,)):
+        raise ValueError(
+            "Stage 6D cache shape mismatch: expected "
+            f"X=({expected_n},31), y/groups/agr=({expected_n},), coords=({expected_n},3); "
+            f"got X={X.shape}, y={y.shape}, groups={groups.shape}, "
+            f"coords={coords.shape}, agr={agr_levels.shape}."
+        )
+
+    expected_groups = np.asarray([f"LNDb-{int(v):04d}" for v in gt_df["LNDbID"]])
+    expected_y = gt_df["Nodule"].to_numpy(dtype=np.int64)
+    expected_coords = gt_df[["x", "y", "z"]].to_numpy(dtype=np.float64)
+    expected_agr = gt_df["AgrLevel"].to_numpy(dtype=np.int64)
+    if not (np.array_equal(groups.astype(str), expected_groups) and
+            np.array_equal(y, expected_y) and
+            np.allclose(coords, expected_coords, rtol=0.0, atol=1e-7) and
+            np.array_equal(agr_levels, expected_agr)):
+        mismatch = {
+            "groups": int(np.sum(groups.astype(str) != expected_groups)),
+            "labels": int(np.sum(y != expected_y)),
+            "coordinates": int(np.sum(~np.isclose(coords, expected_coords, rtol=0.0, atol=1e-7).all(axis=1))),
+            "agreement_levels": int(np.sum(agr_levels != expected_agr))
+        }
+        raise ValueError(
+            "Stage 6D cache rows are not aligned to trainNodules_gt.csv in its current row order. "
+            f"Mismatch counts: {mismatch}. Rebuild the 1.0mm cache from the exact ground-truth CSV."
+        )
+
     # Load official folds
     folds_df = pd.read_csv(folds_path)
     scan_to_fold = {}
