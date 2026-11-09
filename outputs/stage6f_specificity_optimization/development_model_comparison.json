@@ -1,0 +1,82 @@
+{
+  "svm": {
+    "auc_roc": 0.6228457323702595,
+    "average_precision": 0.7186617823125836,
+    "brier_score": 0.2204768553289029,
+    "prob_mean_neg": 0.610247164576801,
+    "prob_std_neg": 0.12641179611672154,
+    "prob_mean_pos": 0.6631123645074295,
+    "prob_std_pos": 0.11525131755846113,
+    "at_threshold_0_50": {
+      "accuracy": 0.6696329254727474,
+      "sensitivity": 0.9306759098786829,
+      "specificity": 0.20186335403726707,
+      "balanced_accuracy": 0.566269631957975,
+      "youden_j": 0.13253926391594995,
+      "tp": 537,
+      "fp": 257,
+      "tn": 65,
+      "fn": 40
+    }
+  },
+  "rf": {
+    "auc_roc": 0.6598087128755503,
+    "average_precision": 0.7427067168717725,
+    "brier_score": 0.2121200149556292,
+    "prob_mean_neg": 0.5774003142790479,
+    "prob_std_neg": 0.20435886736709047,
+    "prob_mean_pos": 0.6903639325948331,
+    "prob_std_pos": 0.15894380953505313,
+    "at_threshold_0_50": {
+      "accuracy": 0.692992213570634,
+      "sensitivity": 0.8821490467937608,
+      "specificity": 0.35403726708074534,
+      "balanced_accuracy": 0.6180931569372531,
+      "youden_j": 0.23618631387450617,
+      "tp": 509,
+      "fp": 208,
+      "tn": 114,
+      "fn": 68
+    }
+  },
+  "xgb": {
+    "auc_roc": 0.6394447614024135,
+    "average_precision": 0.7228171367902078,
+    "brier_score": 0.23706544546791924,
+    "prob_mean_neg": 0.4949904734511738,
+    "prob_std_neg": 0.26026332371014255,
+    "prob_mean_pos": 0.6205528251491035,
+    "prob_std_pos": 0.2254937106514669,
+    "at_threshold_0_50": {
+      "accuracy": 0.6229143492769744,
+      "sensitivity": 0.6845753899480069,
+      "specificity": 0.5124223602484472,
+      "balanced_accuracy": 0.5984988750982271,
+      "youden_j": 0.19699775019645416,
+      "tp": 395,
+      "fp": 157,
+      "tn": 165,
+      "fn": 182
+    }
+  },
+  "ensemble": {
+    "auc_roc": 0.6503627673660075,
+    "average_precision": 0.7332121596251849,
+    "brier_score": 0.21554989874490055,
+    "prob_mean_neg": 0.5608793174356742,
+    "prob_std_neg": 0.18624594990638982,
+    "prob_mean_pos": 0.6580097074171221,
+    "prob_std_pos": 0.15481304077792069,
+    "at_threshold_0_50": {
+      "accuracy": 0.681868743047831,
+      "sensitivity": 0.8405545927209706,
+      "specificity": 0.39751552795031053,
+      "balanced_accuracy": 0.6190350603356405,
+      "youden_j": 0.23807012067128097,
+      "tp": 485,
+      "fp": 194,
+      "tn": 128,
+      "fn": 92
+    }
+  }
+}

@@ -37,16 +37,29 @@ def load_dicom_series(dicom_dir):
     
     return itk_img, img_array, origin, spacing
 
-def world_to_voxel(world_coords, origin, spacing):
+def world_to_voxel(world_coords, origin, spacing, direction=None):
     """
-    Converts 3D world coordinates (X, Y, Z in mm) to voxel indices (Z, Y, X).
+    Convert physical (X, Y, Z) coordinates to NumPy (Z, Y, X) indices.
+
+    SimpleITK maps physical points as: p = origin + direction @ (index * spacing).
+    Direction is a row-major 3x3 direction-cosine matrix. Identity is used only
+    when callers explicitly omit direction for axis-aligned images.
     """
-    # world_coords order: (X, Y, Z)
-    # origin order: (X, Y, Z)
-    # spacing order: (X, Y, Z)
-    voxel_coords = np.round((world_coords - origin) / spacing).astype(int)
-    # Return in (Z, Y, X) order for indexing numpy array
-    return voxel_coords[2], voxel_coords[1], voxel_coords[0]
+    world_coords = np.asarray(world_coords, dtype=np.float64)
+    origin = np.asarray(origin, dtype=np.float64)
+    spacing = np.asarray(spacing, dtype=np.float64)
+    direction = np.eye(3) if direction is None else np.asarray(direction, dtype=np.float64).reshape(3, 3)
+    if world_coords.shape != (3,) or origin.shape != (3,) or spacing.shape != (3,):
+        raise ValueError("world_coords, origin, and spacing must each have shape (3,)")
+    if not np.all(np.isfinite(world_coords)) or not np.all(np.isfinite(origin)):
+        raise ValueError("world coordinates and origin must be finite")
+    if not np.all(np.isfinite(spacing)) or np.any(spacing <= 0):
+        raise ValueError("spacing must contain finite positive values")
+    if not np.all(np.isfinite(direction)) or abs(np.linalg.det(direction)) < 1e-10:
+        raise ValueError("direction must be a finite invertible 3x3 matrix")
+    continuous_index = np.linalg.solve(direction, world_coords - origin) / spacing
+    voxel_xyz = np.rint(continuous_index).astype(int)
+    return int(voxel_xyz[2]), int(voxel_xyz[1]), int(voxel_xyz[0])
 
 def extract_3d_patch(img_array, voxel_center, patch_size=32, fill_value=-1000):
     """
@@ -134,3 +147,96 @@ def patient_level_train_test_split(X_data, y_data, patient_ids, test_size=0.30, 
         y_test = np.array(y_test)
         
     return X_train, X_test, y_train, y_test, train_indices, test_indices
+
+import zipfile
+from pathlib import Path
+
+def safe_extract_zip(zip_file_path, target_dir, max_total_bytes=35 * (1024**3)):
+    """
+    Extracts a ZIP archive securely:
+    - Verifies CRC32 archive integrity with testzip().
+    - Protects against Zip Slip path traversal using Path.relative_to.
+    - Rejects symlink entries.
+    - Defends against resource-exhaustion zip bombs (total uncompressed size and compression ratios).
+    - Extracts member-by-member securely.
+    """
+    target_dir = Path(target_dir).resolve()
+    target_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        bad_file = zip_ref.testzip()
+        if bad_file:
+            raise RuntimeError(f"Corrupt entry inside zip archive: {bad_file}")
+
+        total_uncompressed = 0
+        for member in zip_ref.infolist():
+            # Check for symlink attribute (UNIX mode 0o120000)
+            mode = (member.external_attr >> 16) & 0o170000
+            if mode == 0o120000:
+                raise RuntimeError(f"Symlinks are disallowed in archives: {member.filename}")
+
+            # Check for Zip Slip traversal
+            member_path = (target_dir / member.filename).resolve()
+            try:
+                member_path.relative_to(target_dir)
+            except ValueError:
+                raise RuntimeError(f"Zip slip path traversal detected: {member.filename}")
+
+            # Resource exhaustion / Zip bomb checks
+            total_uncompressed += member.file_size
+            if total_uncompressed > max_total_bytes:
+                raise RuntimeError(f"Archive exceeds safe uncompressed size limit ({max_total_bytes} bytes)")
+            if member.compress_size > 0 and (member.file_size / member.compress_size > 100) and member.file_size > 10 * 1024 * 1024:
+                raise RuntimeError(f"Potential zip bomb detected: anomalous compression ratio for {member.filename}")
+
+            # Extract individual member safely
+            zip_ref.extract(member, target_dir)
+
+import time
+from contextlib import contextmanager
+
+@contextmanager
+def file_lock(lock_path, timeout=120, stale_age=1800, poll_interval=0.5):
+    """
+    OS-level atomic advisory lock using O_CREAT | os.O_EXCL.
+    Covers both download and extraction across processes.
+    Automatically clears stale locks older than stale_age seconds.
+    """
+    lock_path = Path(lock_path).resolve()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    start_time = time.time()
+    fd = None
+
+    while True:
+        try:
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.write(fd, str(os.getpid()).encode("utf-8"))
+            break
+        except FileExistsError:
+            try:
+                mtime = os.path.getmtime(str(lock_path))
+                if (time.time() - mtime) > stale_age:
+                    try:
+                        os.remove(str(lock_path))
+                        continue
+                    except OSError:
+                        pass
+            except OSError:
+                pass
+
+            if (time.time() - start_time) > timeout:
+                raise TimeoutError(f"Failed to acquire file lock within {timeout}s: {lock_path}")
+            time.sleep(poll_interval)
+
+    try:
+        yield lock_path
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if lock_path.exists():
+            try:
+                os.remove(str(lock_path))
+            except OSError:
+                pass

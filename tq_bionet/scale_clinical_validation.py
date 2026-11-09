@@ -17,10 +17,12 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 import json
 import hashlib
 import subprocess
+from pathlib import Path
 
 warnings.filterwarnings('ignore', category=UserWarning, module='ripser')
 
 from tq_bionet.pipeline import extract_tq_bio_features
+from tq_bionet.data_loader import extract_3d_patch, safe_extract_zip, file_lock
 from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, plot_roc_pr_curves
 
 def get_git_commit():
@@ -44,38 +46,73 @@ def download_and_extract_subset(subset_idx):
     
     zip_name = f"subset{subset_idx}.zip"
     zip_path = os.path.join(data_dir_d, zip_name)
+    lock_path = zip_path + ".lock"
     
     if subset_idx == 0:
         extract_path = os.path.join(data_dir_c, "subset0")
+        target_staging = Path(data_dir_c).resolve()
     else:
         extract_path = os.path.join(data_dir_d, f"subset{subset_idx}")
-    
-    # If the unzipped directory already exists, we skip everything
-    if os.path.exists(extract_path) and os.path.isdir(extract_path) and len(os.listdir(extract_path)) > 0:
-        print(f"\n[STEP 1] Unzipped folder '{extract_path}' already exists, skipping download and extraction.")
-        return True
+        target_staging = Path(data_dir_d).resolve()
 
-    tmp_path = zip_path + ".tmp"
-    if os.path.exists(tmp_path):
-        print(f"\n[STEP 1] Detected concurrent download of {zip_name} in progress (.tmp file found).")
-        print("         Waiting for concurrent downloader to finish...")
-        while os.path.exists(tmp_path):
-            time.sleep(10)
-        print(f"   Download completed by concurrent downloader.")
+    with file_lock(lock_path, timeout=120):
+        # If the unzipped directory already exists, we skip everything
+        if os.path.exists(extract_path) and os.path.isdir(extract_path) and len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) > 0:
+            print(f"\n[STEP 1] Unzipped folder '{extract_path}' already exists and contains scans, skipping download/extraction.")
+            return True
 
-    # If the zip file already exists, verify its size is valid (>5 GB) before skipping download
-    if os.path.exists(zip_path):
-        size_gb = os.path.getsize(zip_path) / (1024**3)
-        if size_gb > 5.0:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' already exists ({size_gb:.2f} GB), skipping download. Proceeding directly to extraction.")
-        else:
-            print(f"\n[STEP 1] Zip archive '{zip_path}' exists but is corrupt ({size_gb:.2f} GB < 5 GB). Deleting and redownloading...")
+        tmp_path = f"{zip_path}.tmp.{os.getpid()}"
+
+        # Verify archive integrity via CRC32 testzip before skipping download
+        if os.path.exists(zip_path):
+            is_valid_zip = False
             try:
-                os.remove(zip_path)
-            except Exception as e:
-                print(f"   Failed to delete corrupt zip: {e}")
-            
-            # Download since it was corrupt
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    is_valid_zip = (zf.testzip() is None)
+            except Exception:
+                is_valid_zip = False
+
+            if is_valid_zip:
+                print(f"\n[STEP 1] Zip archive '{zip_path}' verified via CRC32 checksum, skipping download. Proceeding directly to extraction.")
+            else:
+                print(f"\n[STEP 1] Zip archive '{zip_path}' is corrupt/incomplete. Deleting and redownloading...")
+                try:
+                    os.remove(zip_path)
+                except Exception as e:
+                    print(f"   Failed to delete corrupt zip: {e}")
+                
+                # Download since it was corrupt
+                if subset_idx <= 6:
+                    url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
+                else:
+                    url = f"https://zenodo.org/api/records/4121926/files/subset{subset_idx}.zip/content"
+                    
+                print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
+                start_dl = time.time()
+                
+                global last_report
+                last_report = -1
+                
+                def dl_progress(block_num, block_size, total_size):
+                    global last_report
+                    downloaded = block_num * block_size
+                    percent = int(downloaded * 100 / total_size) if total_size > 0 else 0
+                    if percent % 10 == 0 and percent != last_report:
+                        print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
+                        last_report = percent
+        
+                try:
+                    urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
+                    os.replace(tmp_path, zip_path)
+                    print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
+                except Exception as e:
+                    print(f"   Download failed: {e}")
+                    if os.path.exists(tmp_path):
+                        try: os.remove(tmp_path)
+                        except OSError: pass
+                    return False
+        else:
+            # Zenodo URLs
             if subset_idx <= 6:
                 url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
             else:
@@ -84,7 +121,6 @@ def download_and_extract_subset(subset_idx):
             print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
             start_dl = time.time()
             
-            global last_report
             last_report = -1
             
             def dl_progress(block_num, block_size, total_size):
@@ -94,61 +130,37 @@ def download_and_extract_subset(subset_idx):
                 if percent % 10 == 0 and percent != last_report:
                     print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
                     last_report = percent
-    
+                    
             try:
-                urllib.request.urlretrieve(url, zip_path, reporthook=dl_progress)
+                urllib.request.urlretrieve(url, tmp_path, reporthook=dl_progress)
+                os.replace(tmp_path, zip_path)
                 print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
             except Exception as e:
                 print(f"   Download failed: {e}")
+                if os.path.exists(tmp_path):
+                    try: os.remove(tmp_path)
+                    except OSError: pass
                 return False
-    else:
-        # Zenodo URLs
-        if subset_idx <= 6:
-            url = f"https://zenodo.org/api/records/3723295/files/subset{subset_idx}.zip/content"
-        else:
-            url = f"https://zenodo.org/api/records/4121926/files/subset{subset_idx}.zip/content"
             
-        print(f"\n[STEP 1] Downloading {zip_name} from {url}...")
-        start_dl = time.time()
-        
-        last_report = -1
-        
-        def dl_progress(block_num, block_size, total_size):
-            global last_report
-            downloaded = block_num * block_size
-            percent = int(downloaded * 100 / total_size) if total_size > 0 else 0
-            if percent % 10 == 0 and percent != last_report:
-                print(f"      Downloaded {percent}% ({downloaded / (1024**2):.1f} MB of {total_size / (1024**2):.1f} MB)...", flush=True)
-                last_report = percent
-                
+        print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
+        start_ex = time.time()
         try:
-            urllib.request.urlretrieve(url, zip_path, reporthook=dl_progress)
-            print(f"   Successfully downloaded to {zip_path} in {time.time() - start_dl:.1f} seconds.")
+            safe_extract_zip(zip_path, target_staging)
+            if not os.path.exists(extract_path) or len([f for f in os.listdir(extract_path) if f.endswith('.mhd')]) == 0:
+                raise RuntimeError(f"Extraction verification failed: {extract_path} missing or contains no .mhd scans")
+            print(f"   Extraction completed and verified in {time.time() - start_ex:.1f} seconds.")
         except Exception as e:
-            print(f"   Download failed: {e}")
+            print(f"   Extraction failed: {e}")
+            if os.path.exists(zip_path):
+                try:
+                    os.remove(zip_path)
+                    print(f"   Deleted corrupt zip archive: {zip_path}")
+                except Exception as del_err:
+                    print(f"   Failed to delete corrupt zip: {del_err}")
             return False
-        
-    print(f"\n[STEP 2] Extracting {zip_name} to {extract_path}...")
-    start_ex = time.time()
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(data_dir_d)
-        print(f"   Extraction completed in {time.time() - start_ex:.1f} seconds.")
-    except Exception as e:
-        print(f"   Extraction failed: {e}")
-        # Always delete the zip file if extraction fails so the next attempt downloads it fresh
-        if os.path.exists(zip_path):
-            try:
-                os.remove(zip_path)
-                print(f"   Deleted corrupt zip archive: {zip_path}")
-            except Exception as del_err:
-                print(f"   Failed to delete corrupt zip: {del_err}")
-        return False
-        
-    print(f"   Preserving {zip_name} zip archive on D: drive for future reuse.")
-        
-    return True
-
+            
+        print(f"   Preserving {zip_name} zip archive on D: drive for future reuse.")
+        return True
 def get_file_sha256(filepath):
     import hashlib
     h = hashlib.sha256()
@@ -158,6 +170,68 @@ def get_file_sha256(filepath):
             h.update(chunk)
             chunk = f.read(8192)
     return h.hexdigest()
+
+
+REQUIRED_CACHE_ARRAY_KEYS = {"X", "y", "groups", "coords"}
+
+def validate_subset_cache(cache_dir, subset_idx):
+    """
+    Strictly validates a v3.1 subset cache:
+    - metadata.json exists and has algorithm_version == 'v3.1'
+    - array_hashes contains EXACTLY {"X", "y", "groups", "coords"}
+    - all 4 .npy files exist and match their SHA256 hashes exactly
+    - array dimensions, non-emptiness, label validity, and finiteness are verified
+    Returns (X, y, groups, coords, metadata) or raises ValueError
+    """
+    cache_path = Path(cache_dir)
+    metadata_path = cache_path / "metadata.json"
+    if not metadata_path.exists():
+        raise ValueError(f"Cache metadata missing at: {metadata_path}")
+        
+    with metadata_path.open("r", encoding="utf-8") as f:
+        meta = json.load(f)
+        
+    if meta.get("algorithm_version") != "v3.1" or meta.get("feature_version") != "v3.1":
+        raise ValueError(f"Cache version mismatch: expected v3.1, got {meta.get('algorithm_version')}")
+    if meta.get("subset_ids") != [int(subset_idx)]:
+        raise ValueError(f"Subset ID mismatch: expected {[int(subset_idx)]}, got {meta.get('subset_ids')}")
+    if meta.get("feature_dimension") != 31:
+        raise ValueError(f"Feature dimension mismatch: expected 31, got {meta.get('feature_dimension')}")
+        
+    array_hashes = meta.get("array_hashes")
+    if not isinstance(array_hashes, dict) or set(array_hashes.keys()) != REQUIRED_CACHE_ARRAY_KEYS:
+        raise ValueError(f"array_hashes must contain exactly {REQUIRED_CACHE_ARRAY_KEYS}, got {set(array_hashes.keys()) if isinstance(array_hashes, dict) else None}")
+        
+    array_files = {
+        "X": cache_path / "X.npy",
+        "y": cache_path / "y.npy",
+        "groups": cache_path / "groups.npy",
+        "coords": cache_path / "coords.npy"
+    }
+    
+    for key, fpath in array_files.items():
+        if not fpath.exists():
+            raise ValueError(f"Missing cache file: {fpath}")
+        actual_h = get_file_sha256(str(fpath))
+        if actual_h != array_hashes[key]:
+            raise ValueError(f"{key} cache SHA256 mismatch for subset{subset_idx}: expected {array_hashes[key]}, got {actual_h}")
+            
+    X = np.load(array_files["X"], allow_pickle=False)
+    y = np.load(array_files["y"], allow_pickle=False)
+    groups = np.load(array_files["groups"], allow_pickle=False)
+    coords = np.load(array_files["coords"], allow_pickle=False)
+    
+    n = len(y)
+    if X.ndim != 2 or X.shape != (n, 31):
+        raise ValueError(f"Invalid X shape: {X.shape}, expected ({n}, 31)")
+    if y.ndim != 1 or groups.ndim != 1 or coords.ndim != 2 or coords.shape != (n, 3):
+        raise ValueError("Cache array shape mismatch")
+    if len(groups) != n or not np.isfinite(X).all() or not np.isin(y, [0, 1]).all():
+        raise ValueError("Invalid feature values or non-binary labels")
+    if not np.isfinite(coords).all():
+        raise ValueError("Non-finite coordinates")
+        
+    return X, y, groups, coords, meta
 
 def process_and_save_subset(subset_idx):
     # Dynamic path resolution (Issue 5 portability)
@@ -169,12 +243,14 @@ def process_and_save_subset(subset_idx):
     else:
         data_dir_d = str(project_root / "luna16_data" / "large_data")
     
-    # Skip reprocessing if valid cache exists (Issue 2/3 optimization)
-    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
-    metadata_path = os.path.join(cache_dir, "metadata.json")
-    if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
-        print(f"   [STEP 3] Valid cache for subset{subset_idx} already exists. Skipping extraction.")
+    # Skip reprocessing only if entire cache is validated
+    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
+    try:
+        validate_subset_cache(cache_dir, subset_idx)
+        print(f"   [STEP 3] Valid, complete v3.1 cache for subset{subset_idx} verified. Skipping extraction.")
         return True
+    except (ValueError, FileNotFoundError, OSError) as e:
+        print(f"   [STEP 3] Cache for subset{subset_idx} invalid or missing ({e}). Proceeding to extract and build...")
         
     annotations_path = os.path.join(data_dir_c, "annotations.csv")
     candidates_path = os.path.join(data_dir_c, "candidates_V2.csv")
@@ -282,22 +358,8 @@ def process_and_save_subset(subset_idx):
             
             z_vox, y_vox, x_vox = voxel_coords[2], voxel_coords[1], voxel_coords[0]
             
-            z_min = max(0, z_vox - half_size)
-            z_max = min(np_image.shape[0], z_vox + half_size)
-            y_min = max(0, y_vox - half_size)
-            y_max = min(np_image.shape[1], y_vox + half_size)
-            x_min = max(0, x_vox - half_size)
-            x_max = min(np_image.shape[2], x_vox + half_size)
-            
-            patch = np_image[z_min:z_max, y_min:y_max, x_min:x_max]
-            
-            if patch.shape != (32, 32, 32):
-                padded = np.zeros((32, 32, 32))
-                dz = min(32, patch.shape[0])
-                dy = min(32, patch.shape[1])
-                dx = min(32, patch.shape[2])
-                padded[:dz, :dy, :dx] = patch[:dz, :dy, :dx]
-                patch = padded
+            # Extract 32x32x32 patch centered at voxel_coords with -1000 HU (air) padding
+            patch = extract_3d_patch(np_image, (z_vox, y_vox, x_vox), patch_size=32, fill_value=-1000.0)
                 
             median_val = np.median(patch)
             iqr_val = np.percentile(patch, 75) - np.percentile(patch, 25)
@@ -329,7 +391,7 @@ def process_and_save_subset(subset_idx):
     print(f"   Extraction completed in {time.time() - start_time:.1f} seconds. Extracted shape: {X_new.shape}")
     
     # Save inside versioned folder cache
-    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
+    cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
     os.makedirs(cache_dir, exist_ok=True)
     
     X_path = os.path.join(cache_dir, "X.npy")
@@ -342,19 +404,25 @@ def process_and_save_subset(subset_idx):
     np.save(groups_path, groups_new)
     np.save(coords_path, coords_new)
     
-    # Generate metadata.json
-    sha_hash = get_file_sha256(X_path)
+    # Generate metadata.json with independent hashes for all arrays
+    array_hashes = {
+        "X": get_file_sha256(X_path),
+        "y": get_file_sha256(y_path),
+        "groups": get_file_sha256(groups_path),
+        "coords": get_file_sha256(coords_path)
+    }
     
     metadata = {
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "preprocessing_version": "local_zscore_iqr_v2.0",
         "feature_dimension": int(X_new.shape[1]),
         "subset_ids": [int(subset_idx)],
         "patient_count": int(len(np.unique(groups_new))),
         "sample_count": int(len(y_new)),
         "creation_time": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
-        "SHA256 checksum": sha_hash,
+        "SHA256 checksum": array_hashes["X"],
+        "array_hashes": array_hashes,
         "random_seed": 42
     }
     
@@ -384,34 +452,14 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
     subsets_parts = []
     
     for subset_idx in subsets_list:
-        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{subset_idx}")
-        metadata_path = os.path.join(cache_dir, "metadata.json")
-        
-        if not os.path.exists(metadata_path):
-            raise ValueError(f"Cache metadata missing for subset{subset_idx} at: {metadata_path}")
-            
-        with open(metadata_path, "r") as f:
-            meta = json.load(f)
-            
-        # Verify metadata
-        if meta["feature_dimension"] != 31:
-            raise ValueError(f"Feature dimension mismatch for subset{subset_idx}: expected 31, got {meta['feature_dimension']}")
-        if meta["algorithm_version"] != "v3.0" or meta["feature_version"] != "v3.0":
-            raise ValueError(f"Version mismatch for subset{subset_idx}: expected v3.0, got algorithm {meta['algorithm_version']}, feature {meta['feature_version']}")
-        if meta["subset_ids"] != [subset_idx]:
-            raise ValueError(f"Subset ID mismatch inside metadata: expected {[subset_idx]}, got {meta['subset_ids']}")
-            
-        # Verify SHA256 Checksum
-        X_path = os.path.join(cache_dir, "X.npy")
-        current_hash = get_file_sha256(X_path)
-        if current_hash != meta["SHA256 checksum"]:
-            raise ValueError(f"SHA256 checksum mismatch for subset{subset_idx} cache file! File is corrupt or modified.")
-            
-        X_parts.append(np.load(X_path))
-        y_parts.append(np.load(os.path.join(cache_dir, "y.npy")))
-        groups_parts.append(np.load(os.path.join(cache_dir, "groups.npy")))
-        coords_parts.append(np.load(os.path.join(cache_dir, "coords.npy")))
-        subsets_parts.append(np.full(len(y_parts[-1]), subset_idx))
+        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{subset_idx}")
+        X, y, groups, coords, meta = validate_subset_cache(cache_dir, subset_idx)
+        n = len(y)
+        X_parts.append(X)
+        y_parts.append(y)
+        groups_parts.append(groups)
+        coords_parts.append(coords)
+        subsets_parts.append(np.full(n, subset_idx, dtype=np.int16))
         
     X_combined = np.concatenate(X_parts, axis=0)
     y_combined = np.concatenate(y_parts, axis=0)
@@ -424,6 +472,13 @@ def reconstruct_combined_dataset(subsets_list, data_dir_c):
 def run_retraining():
     import json
     from pathlib import Path
+    from tq_bionet.model_config import (
+        prune_to_selected_features,
+        fit_frozen_pipeline,
+        predict_ensemble,
+        compute_calibration_metrics,
+        DEFAULT_DECISION_THRESHOLD
+    )
     project_root = Path(__file__).resolve().parent.parent
     data_dir_c = str(project_root / "luna16_data")
     
@@ -493,23 +548,12 @@ def run_retraining():
     print(f"   Train set   : {len(X_train)} samples (from {len(train_patients)} scans)")
     print(f"   Test set    : {len(X_test)} samples (from {len(test_patients)} scans)")
     
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    svm = SVC(C=100.0, gamma='scale', probability=True, random_state=42)
-    xgb = XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.01, eval_metric='logloss', random_state=42)
-    rf = RandomForestClassifier(n_estimators=150, max_depth=4, random_state=42)
-    
-    svm.fit(X_train_scaled, y_train)
-    xgb.fit(X_train, y_train)
-    rf.fit(X_train, y_train)
-    
-    svm_probs = svm.predict_proba(X_test_scaled)[:, 1]
-    xgb_probs = xgb.predict_proba(X_test)[:, 1]
-    rf_probs = rf.predict_proba(X_test)[:, 1]
-    
-    ensemble_probs = (svm_probs + xgb_probs + rf_probs) / 3.0
+    svm, xgb, rf, scaler = fit_frozen_pipeline(X_train, y_train, random_state=42)
+    pred_res = predict_ensemble(svm, xgb, rf, scaler, X_test, threshold=DEFAULT_DECISION_THRESHOLD)
+    svm_probs = pred_res['svm_prob']
+    xgb_probs = pred_res['xgb_prob']
+    rf_probs = pred_res['rf_prob']
+    ensemble_probs = pred_res['ensemble_prob']
     
     train_pos = np.sum(y_train == 1)
     train_neg = np.sum(y_train == 0)
@@ -642,18 +686,18 @@ def run_retraining():
 
     # GENERATE EXPERIMENT MANIFEST
     manifest = {
-        "experiment_id": "tq_bionet_v3.0_dev_cohort_repro",
+        "experiment_id": "tq_bionet_v3_1.0_dev_cohort_repro",
         "date": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "git_commit": get_git_commit(),
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": 42,
         "subset_list": [0, 1, 2, 3, 4, 5],
         "patient_ids_hash": hashlib.sha256(groups.tobytes()).hexdigest(),
         "sample_count": int(X.shape[0]),
         "feature_dimension": int(X.shape[1]),
         "cache_hashes": {
-            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{i}", "X.npy"))
+            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{i}", "X.npy"))
             for i in [0, 1, 2, 3, 4, 5]
         },
         "runtime_evaluation_sec": float(eval_duration)

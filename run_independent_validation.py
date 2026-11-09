@@ -23,7 +23,17 @@ from tq_bionet.scale_clinical_validation import (
     get_git_commit
 )
 from tq_bionet.pipeline import extract_tq_bio_features
-from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci
+from tq_bionet.evaluation_metrics import compute_wilson_ci, compute_bootstrap_ci, compute_cluster_bootstrap_ci
+from tq_bionet.model_config import (
+    FROZEN_31_FEATURES,
+    FROZEN_15_SELECTED_FEATURES,
+    prune_to_selected_features,
+    fit_frozen_pipeline,
+    predict_ensemble,
+    compute_calibration_metrics,
+    save_pipeline_bundle,
+    DEFAULT_DECISION_THRESHOLD
+)
 
 def run_independent_validation():
     print("======================================================================")
@@ -34,18 +44,24 @@ def run_independent_validation():
     
     project_root = Path(__file__).resolve().parent
     data_dir_c = str(project_root / "luna16_data")
+    outputs_dir = project_root / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
     
     # Check/Download/Process subsets 6, 7, 8, 9
     validation_subsets = [6, 7, 8, 9]
     print(f"Verifying caches for independent validation subsets: {validation_subsets}...")
     for idx in validation_subsets:
-        # Cache path check
-        cache_dir = os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{idx}")
-        metadata_path = os.path.join(cache_dir, "metadata.json")
-        if os.path.exists(metadata_path) and os.path.exists(os.path.join(cache_dir, "X.npy")):
-            print(f"   Subset {idx} cache verified.")
+        # Validate every cache array, schema, version and checksum before reuse.
+        cache_valid = False
+        try:
+            reconstruct_combined_dataset([idx], data_dir_c)
+            cache_valid = True
+        except (OSError, ValueError, KeyError, FileNotFoundError) as cache_error:
+            print(f"   Subset {idx} cache invalid or missing: {cache_error}")
+        if cache_valid:
+            print(f"   Subset {idx} v3.1 cache verified.")
         else:
-            print(f"   Subset {idx} cache not found. Re-building cache...")
+            print(f"   Re-building subset {idx} v3.1 cache...")
             # Download and extract raw scan files
             dl_success = False
             for attempt in range(1, 11):
@@ -74,62 +90,57 @@ def run_independent_validation():
     print("Reconstructing independent validation cohort (Subsets 6-9) for evaluation...")
     X_val, y_val, groups_val, coords_val, subsets_val = reconstruct_combined_dataset(validation_subsets, data_dir_c)
     print(f"   Independent validation cohort size: {len(X_val)} samples")
+
+    # Hard split-integrity checks before fitting or evaluating any model.
+    dev_series = set(np.asarray(groups_dev).tolist())
+    val_series = set(np.asarray(groups_val).tolist())
+    overlap = dev_series.intersection(val_series)
+    if overlap:
+        raise RuntimeError(
+            f"SeriesUID leakage between development and validation cohorts: "
+            f"{len(overlap)} overlapping series; examples={list(sorted(overlap))[:5]}"
+        )
+    if set(np.unique(subsets_dev).tolist()) != {0, 1, 2, 3, 4, 5}:
+        raise RuntimeError("Development cohort does not contain exactly subsets 0-5")
+    if set(np.unique(subsets_val).tolist()) != {6, 7, 8, 9}:
+        raise RuntimeError("Validation cohort does not contain exactly subsets 6-9")
+    if not (len(X_dev) == len(y_dev) == len(groups_dev) == len(coords_dev) == len(subsets_dev)):
+        raise RuntimeError("Development cohort arrays have inconsistent lengths")
+    if not (len(X_val) == len(y_val) == len(groups_val) == len(coords_val) == len(subsets_val)):
+        raise RuntimeError("Validation cohort arrays have inconsistent lengths")
+    if not np.isfinite(X_dev).all() or not np.isfinite(X_val).all():
+        raise RuntimeError("Non-finite feature values found in a cohort")
+    if not np.isin(y_dev, [0, 1]).all() or not np.isin(y_val, [0, 1]).all():
+        raise RuntimeError("Non-binary labels found in a cohort")
+
+    print(f"   Development SeriesUIDs: {len(dev_series)}")
+    print(f"   Validation SeriesUIDs: {len(val_series)}")
+    print("   Split integrity: PASS (zero overlapping SeriesUIDs)")
     
-    # 3. Dynamic Feature Selection (Prune to 15 frozen features)
-    dummy_patch = np.zeros((16, 16, 16))
-    dummy_dict, _ = extract_tq_bio_features(dummy_patch)
-    sorted_keys = sorted([k for k in dummy_dict.keys() if k != 'extraction_time_sec'])
-    
-    locked_feature_names = [
-        'H0_entropy',
-        'H0_total_persistence',
-        'H1_count',
-        'H1_total_persistence',
-        'blobness_ratio',
-        'fractal_dimension',
-        'hessian_L1',
-        'hessian_L2',
-        'hessian_L3',
-        'lacunarity_4',
-        'lacunarity_8',
-        'quantum_eigenvalue_0',
-        'quantum_eigenvalue_1',
-        'quantum_eigenvalue_2',
-        'vesselness_ratio'
-    ]
-    selected_indices = [sorted_keys.index(name) for name in locked_feature_names]
-    
-    X_dev_pruned = X_dev[:, selected_indices]
-    X_val_pruned = X_val[:, selected_indices]
-    
-    # 4. Fit Preprocessing standardizer on Development Cohort
-    scaler = StandardScaler()
-    X_dev_scaled = scaler.fit_transform(X_dev_pruned)
-    X_val_scaled = scaler.transform(X_val_pruned)
-    
-    # 5. Fit Frozen Classifiers on full Development Cohort
+    # 3. Feature Selection: Prune to 15 frozen features using central model_config
+    X_dev_pruned = prune_to_selected_features(X_dev)
+    X_val_pruned = prune_to_selected_features(X_val)
+
+    # 4 & 5. Fit Frozen Classifiers on full Development Cohort
     print("\nTraining frozen SVM, XGBoost, and RF classifiers on the full development cohort...")
-    svm = SVC(C=100.0, gamma='scale', probability=True, random_state=42)
-    xgb = XGBClassifier(n_estimators=200, max_depth=5, learning_rate=0.01, eval_metric='logloss', random_state=42)
-    rf = RandomForestClassifier(n_estimators=150, max_depth=4, random_state=42)
-    
-    svm.fit(X_dev_scaled, y_dev)
-    xgb.fit(X_dev_pruned, y_dev)
-    rf.fit(X_dev_pruned, y_dev)
-    
-    # 6. Evaluate on Independent Validation Cohort
+    svm, xgb, rf, scaler = fit_frozen_pipeline(X_dev_pruned, y_dev, random_state=42)
+
+    # Save frozen pipeline bundle
+    save_pipeline_bundle(outputs_dir / "frozen_v3_1_pipeline", svm, xgb, rf, scaler)
+
+    # 6. Evaluate on Independent Validation Cohort using predict_ensemble
     print("Evaluating models on independent validation cohort...")
-    svm_probs = svm.predict_proba(X_val_scaled)[:, 1]
-    xgb_probs = xgb.predict_proba(X_val_pruned)[:, 1]
-    rf_probs = rf.predict_proba(X_val_pruned)[:, 1]
+    preds_dict = predict_ensemble(svm, xgb, rf, scaler, X_val_pruned, threshold=DEFAULT_DECISION_THRESHOLD)
+    svm_probs = preds_dict['svm_prob']
+    xgb_probs = preds_dict['xgb_prob']
+    rf_probs = preds_dict['rf_prob']
+    ensemble_probs = preds_dict['ensemble_prob']
+    ensemble_preds = preds_dict['y_pred']
+    svm_preds = (svm_probs >= DEFAULT_DECISION_THRESHOLD).astype(int)
+    xgb_preds = (xgb_probs >= DEFAULT_DECISION_THRESHOLD).astype(int)
     
-    ensemble_probs = (svm_probs + xgb_probs + rf_probs) / 3.0
-    ensemble_preds = (ensemble_probs >= 0.5).astype(int)
-    svm_preds = (svm_probs >= 0.5).astype(int)
-    xgb_preds = (xgb_probs >= 0.5).astype(int)
-    
-    # Calculate performance metrics
-    def evaluate_model(y_true, y_pred, y_prob):
+    # Calculate performance metrics with scan-cluster bootstrap intervals and calibration
+    def evaluate_model(y_true, y_pred, y_prob, groups=None):
         acc = accuracy_score(y_true, y_pred)
         sens = recall_score(y_true, y_pred) if np.sum(y_true == 1) > 0 else 0.0
         tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
@@ -137,43 +148,51 @@ def run_independent_validation():
         prec = precision_score(y_true, y_pred, zero_division=0)
         f1 = f1_score(y_true, y_pred, zero_division=0)
         auc_val = roc_auc_score(y_true, y_prob) if len(np.unique(y_true)) > 1 else 0.5
+
+        cal = compute_calibration_metrics(y_true, y_prob)
         
-        # Calculate Wilson and Bootstrap CIs
-        acc_low, acc_high = compute_wilson_ci(int(np.sum(y_pred == y_true)), len(y_true))
+        # Scan-cluster bootstrap confidence intervals when scan groups provided
+        if groups is not None and len(np.unique(groups)) > 1:
+            auc_ci = compute_cluster_bootstrap_ci(y_true, y_prob, groups, roc_auc_score)
+            f1_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, f1_score)
+            acc_ci = compute_cluster_bootstrap_ci(y_true, y_pred, groups, accuracy_score)
+        else:
+            auc_ci = compute_bootstrap_ci(y_true, y_prob, roc_auc_score)
+            f1_ci = compute_bootstrap_ci(y_true, y_pred, f1_score)
+            acc_ci = compute_wilson_ci(int(np.sum(y_pred == y_true)), len(y_true))
+
         sens_low, sens_high = compute_wilson_ci(int(np.sum((y_pred == 1) & (y_true == 1))), int(np.sum(y_true == 1)))
         spec_low, spec_high = compute_wilson_ci(int(np.sum((y_pred == 0) & (y_true == 0))), int(np.sum(y_true == 0)))
         prec_low, prec_high = compute_wilson_ci(int(np.sum((y_pred == 1) & (y_true == 1))), int(np.sum(y_pred == 1)))
         
-        f1_low, f1_high = compute_bootstrap_ci(y_true, y_pred, f1_score)
-        auc_low, auc_high = compute_bootstrap_ci(y_true, y_prob, roc_auc_score)
-        
         return {
-            "accuracy": acc, "accuracy_ci": (acc_low, acc_high),
+            "accuracy": acc, "accuracy_ci": acc_ci,
             "sensitivity": sens, "sensitivity_ci": (sens_low, sens_high),
             "specificity": spec, "specificity_ci": (spec_low, spec_high),
             "precision": prec, "precision_ci": (prec_low, prec_high),
-            "f1": f1, "f1_ci": (f1_low, f1_high),
-            "auc": auc_val, "auc_ci": (auc_low, auc_high),
+            "f1": f1, "f1_ci": f1_ci,
+            "auc": auc_val, "auc_ci": auc_ci,
+            "brier_score": cal["brier_score"],
+            "expected_calibration_error": cal["expected_calibration_error"],
             "cm": {"tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp)}
         }
         
-    metrics_ens = evaluate_model(y_val, ensemble_preds, ensemble_probs)
-    metrics_svm = evaluate_model(y_val, svm_preds, svm_probs)
-    metrics_xgb = evaluate_model(y_val, xgb_preds, xgb_probs)
+    metrics_ens = evaluate_model(y_val, ensemble_preds, ensemble_probs, groups=groups_val)
+    metrics_svm = evaluate_model(y_val, svm_preds, svm_probs, groups=groups_val)
+    metrics_xgb = evaluate_model(y_val, xgb_preds, xgb_probs, groups=groups_val)
     
     # 7. Outputs Save & Cleanup
     outputs_dir = project_root / "outputs"
     outputs_dir.mkdir(parents=True, exist_ok=True)
-    artifacts_dir = r"C:\Users\suraj\.gemini\antigravity\brain\2276150a-3f7e-4079-b867-712c3f036612"
-
+    
     # Evaluate each subset separately and save per-subset JSON metrics
     per_subset_metrics = {}
     for sub in validation_subsets:
         mask = (subsets_val == sub)
         if np.sum(mask) > 0:
-            m_ens = evaluate_model(y_val[mask], ensemble_preds[mask], ensemble_probs[mask])
-            m_svm = evaluate_model(y_val[mask], svm_preds[mask], svm_probs[mask])
-            m_xgb = evaluate_model(y_val[mask], xgb_preds[mask], xgb_probs[mask])
+            m_ens = evaluate_model(y_val[mask], ensemble_preds[mask], ensemble_probs[mask], groups=groups_val[mask])
+            m_svm = evaluate_model(y_val[mask], svm_preds[mask], svm_probs[mask], groups=groups_val[mask])
+            m_xgb = evaluate_model(y_val[mask], xgb_preds[mask], xgb_probs[mask], groups=groups_val[mask])
             
             sub_dict = {
                 "SVM": {k: v for k, v in m_svm.items() if k != "cm"},
@@ -186,9 +205,6 @@ def run_independent_validation():
             sub_path = outputs_dir / f"validation_subset{sub}_metrics.json"
             with open(sub_path, "w") as f:
                 json.dump(sub_dict, f, indent=4)
-            if os.path.exists(artifacts_dir):
-                with open(os.path.join(artifacts_dir, f"validation_subset{sub}_metrics.json"), "w") as f:
-                    json.dump(sub_dict, f, indent=4)
                     
     # Save predictions
     df_preds = pd.DataFrame({
@@ -232,14 +248,14 @@ def run_independent_validation():
         "phase": "Independent Validation",
         "date": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "git_commit": get_git_commit(),
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": 42,
         "subset_list": validation_subsets,
         "sample_count": int(len(y_val)),
         "feature_dimension": 15,
         "cache_hashes": {
-            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3", f"subset{i}", "X.npy"))
+            f"subset{i}": get_file_sha256(os.path.join(data_dir_c, "cache", "tq_bionet_v3_1", f"subset{i}", "X.npy"))
             for i in validation_subsets
         },
         "runtime_evaluation_sec": float(runtime_duration)
@@ -249,27 +265,27 @@ def run_independent_validation():
         json.dump(manifest_val, f, indent=4)
         
     # Save validation summary markdown
-    summary_md = f"""# TQ-BioNet v3.0 Independent Validation Summary
+    summary_md = f"""# TQ-BioNet v3.1 Independent Validation Summary
 
-This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.0 framework on the completely unseen independent validation cohort (Subsets 6–9).
+This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v3.1 framework on the independent evaluation cohort (SeriesUID-separated Subsets 6–9). Note: SeriesUID separation establishes scan-level independence, which is conditional on confirming patient-level separation where scans originate from distinct individuals.
 
 ## Validation Scope
 - **Validation Date**: {manifest_val["date"]} UTC
 - **Development Cohort**: Subsets 0–5 (1446 samples) - Used for classifier training
 - **Validation Cohort**: Subsets 6–9 ({len(y_val)} samples) - Used for validation testing
-- **Feature Pipeline Version**: v3.0 (Isotropic 1.0mm, Local Z-Score IQR Preprocessing)
+- **Feature Pipeline Version**: v3.1 (Isotropic 1.0mm, Local Z-Score IQR Preprocessing)
 - **Features Pruned**: 15 key biophysical/topological features
 
 ## Independent Validation Cohort Metrics (Combined Subsets 6–9)
 
-| Metric | Support Vector Machine (SVM) | XGBoost Classifier | Voting Ensemble |
+| Metric [CI Type] | Support Vector Machine (SVM) | XGBoost Classifier | Voting Ensemble |
 | :--- | :--- | :--- | :--- |
-| **Accuracy** | {metrics_svm["accuracy"]:.4f} [{metrics_svm["accuracy_ci"][0]:.3f} - {metrics_svm["accuracy_ci"][1]:.3f}] | {metrics_xgb["accuracy"]:.4f} [{metrics_xgb["accuracy_ci"][0]:.3f} - {metrics_xgb["accuracy_ci"][1]:.3f}] | {metrics_ens["accuracy"]:.4f} [{metrics_ens["accuracy_ci"][0]:.3f} - {metrics_ens["accuracy_ci"][1]:.3f}] |
-| **Sensitivity** | {metrics_svm["sensitivity"]:.4f} [{metrics_svm["sensitivity_ci"][0]:.3f} - {metrics_svm["sensitivity_ci"][1]:.3f}] | {metrics_xgb["sensitivity"]:.4f} [{metrics_xgb["sensitivity_ci"][0]:.3f} - {metrics_xgb["sensitivity_ci"][1]:.3f}] | {metrics_ens["sensitivity"]:.4f} [{metrics_ens["sensitivity_ci"][0]:.3f} - {metrics_ens["sensitivity_ci"][1]:.3f}] |
-| **Specificity** | {metrics_svm["specificity"]:.4f} [{metrics_svm["specificity_ci"][0]:.3f} - {metrics_svm["specificity_ci"][1]:.3f}] | {metrics_xgb["specificity"]:.4f} [{metrics_xgb["specificity_ci"][0]:.3f} - {metrics_xgb["specificity_ci"][1]:.3f}] | {metrics_ens["specificity"]:.4f} [{metrics_ens["specificity_ci"][0]:.3f} - {metrics_ens["specificity_ci"][1]:.3f}] |
-| **Precision** | {metrics_svm["precision"]:.4f} [{metrics_svm["precision_ci"][0]:.3f} - {metrics_svm["precision_ci"][1]:.3f}] | {metrics_xgb["precision"]:.4f} [{metrics_xgb["precision_ci"][0]:.3f} - {metrics_xgb["precision_ci"][1]:.3f}] | {metrics_ens["precision"]:.4f} [{metrics_ens["precision_ci"][0]:.3f} - {metrics_ens["precision_ci"][1]:.3f}] |
-| **F1-Score** | {metrics_svm["f1"]:.4f} [{metrics_svm["f1_ci"][0]:.3f} - {metrics_svm["f1_ci"][1]:.3f}] | {metrics_xgb["f1"]:.4f} [{metrics_xgb["f1_ci"][0]:.3f} - {metrics_xgb["f1_ci"][1]:.3f}] | {metrics_ens["f1"]:.4f} [{metrics_ens["f1_ci"][0]:.3f} - {metrics_ens["f1_ci"][1]:.3f}] |
-| **AUC-ROC** | {metrics_svm["auc"]:.4f} [{metrics_svm["auc_ci"][0]:.3f} - {metrics_svm["auc_ci"][1]:.3f}] | {metrics_xgb["auc"]:.4f} [{metrics_xgb["auc_ci"][0]:.3f} - {metrics_xgb["auc_ci"][1]:.3f}] | {metrics_ens["auc"]:.4f} [{metrics_ens["auc_ci"][0]:.3f} - {metrics_ens["auc_ci"][1]:.3f}] |
+| **Accuracy** [Scan-Cluster Bootstrap 95%] | {metrics_svm["accuracy"]:.4f} [{metrics_svm["accuracy_ci"][0]:.3f} - {metrics_svm["accuracy_ci"][1]:.3f}] | {metrics_xgb["accuracy"]:.4f} [{metrics_xgb["accuracy_ci"][0]:.3f} - {metrics_xgb["accuracy_ci"][1]:.3f}] | {metrics_ens["accuracy"]:.4f} [{metrics_ens["accuracy_ci"][0]:.3f} - {metrics_ens["accuracy_ci"][1]:.3f}] |
+| **Sensitivity** [Candidate Wilson 95%] | {metrics_svm["sensitivity"]:.4f} [{metrics_svm["sensitivity_ci"][0]:.3f} - {metrics_svm["sensitivity_ci"][1]:.3f}] | {metrics_xgb["sensitivity"]:.4f} [{metrics_xgb["sensitivity_ci"][0]:.3f} - {metrics_xgb["sensitivity_ci"][1]:.3f}] | {metrics_ens["sensitivity"]:.4f} [{metrics_ens["sensitivity_ci"][0]:.3f} - {metrics_ens["sensitivity_ci"][1]:.3f}] |
+| **Specificity** [Candidate Wilson 95%] | {metrics_svm["specificity"]:.4f} [{metrics_svm["specificity_ci"][0]:.3f} - {metrics_svm["specificity_ci"][1]:.3f}] | {metrics_xgb["specificity"]:.4f} [{metrics_xgb["specificity_ci"][0]:.3f} - {metrics_xgb["specificity_ci"][1]:.3f}] | {metrics_ens["specificity"]:.4f} [{metrics_ens["specificity_ci"][0]:.3f} - {metrics_ens["specificity_ci"][1]:.3f}] |
+| **Precision** [Candidate Wilson 95%] | {metrics_svm["precision"]:.4f} [{metrics_svm["precision_ci"][0]:.3f} - {metrics_svm["precision_ci"][1]:.3f}] | {metrics_xgb["precision"]:.4f} [{metrics_xgb["precision_ci"][0]:.3f} - {metrics_xgb["precision_ci"][1]:.3f}] | {metrics_ens["precision"]:.4f} [{metrics_ens["precision_ci"][0]:.3f} - {metrics_ens["precision_ci"][1]:.3f}] |
+| **F1-Score** [Scan-Cluster Bootstrap 95%] | {metrics_svm["f1"]:.4f} [{metrics_svm["f1_ci"][0]:.3f} - {metrics_svm["f1_ci"][1]:.3f}] | {metrics_xgb["f1"]:.4f} [{metrics_xgb["f1_ci"][0]:.3f} - {metrics_xgb["f1_ci"][1]:.3f}] | {metrics_ens["f1"]:.4f} [{metrics_ens["f1_ci"][0]:.3f} - {metrics_ens["f1_ci"][1]:.3f}] |
+| **AUC-ROC** [Scan-Cluster Bootstrap 95%] | {metrics_svm["auc"]:.4f} [{metrics_svm["auc_ci"][0]:.3f} - {metrics_svm["auc_ci"][1]:.3f}] | {metrics_xgb["auc"]:.4f} [{metrics_xgb["auc_ci"][0]:.3f} - {metrics_xgb["auc_ci"][1]:.3f}] | {metrics_ens["auc"]:.4f} [{metrics_ens["auc_ci"][0]:.3f} - {metrics_ens["auc_ci"][1]:.3f}] |
 
 ## Ensemble Confusion Matrix
 - **True Negatives**: {cm["tn"]}
@@ -280,17 +296,6 @@ This document summarizes the final evaluation outcomes of the frozen TQ-BioNet v
     summary_path = outputs_dir / "validation_summary.md"
     with open(summary_path, "w") as f:
         f.write(summary_md)
-        
-    # Also save to conversation artifacts directory if available
-    if os.path.exists(artifacts_dir):
-        # copy metrics to artifacts
-        with open(os.path.join(artifacts_dir, "validation_metrics.json"), "w") as f:
-            json.dump(metrics_dict, f, indent=4)
-        df_cm.to_csv(os.path.join(artifacts_dir, "validation_confusion_matrix.csv"), index=False)
-        with open(os.path.join(artifacts_dir, "experiment_manifest_validation.json"), "w") as f:
-            json.dump(manifest_val, f, indent=4)
-        with open(os.path.join(artifacts_dir, "validation_summary.md"), "w") as f:
-            f.write(summary_md)
             
     print("\nValidation artifacts saved to outputs directory successfully.")
     

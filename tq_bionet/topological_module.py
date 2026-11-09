@@ -8,6 +8,15 @@ def extract_point_cloud(probability_density, threshold=0.01, max_points=500):
     To avoid memory blowup and slow computation in ripser, it selects the top max_points
     coordinates with the highest probability values.
     """
+    probability_density = np.asarray(probability_density, dtype=np.float64)
+    if probability_density.ndim != 3 or any(d < 1 for d in probability_density.shape):
+        raise ValueError("probability_density must be a non-empty 3D array")
+    if not np.all(np.isfinite(probability_density)):
+        raise ValueError("probability_density must contain only finite values")
+    if not np.isfinite(threshold):
+        raise ValueError("threshold must be finite")
+    if not isinstance(max_points, (int, np.integer)) or max_points < 1:
+        raise ValueError("max_points must be a positive integer")
     # Find coordinates where probability exceeds threshold
     coords = np.argwhere(probability_density >= threshold)
     
@@ -30,6 +39,13 @@ def compute_persistence_features(point_cloud):
     Computes persistent homology for a point cloud and extracts summary statistics
     for H0 (connected components) and H1 (tunnels/loops).
     """
+    point_cloud = np.asarray(point_cloud, dtype=np.float64)
+    if point_cloud.ndim != 2 or point_cloud.shape[1] != 3:
+        raise ValueError("point_cloud must have shape (n_points, 3)")
+    if not np.all(np.isfinite(point_cloud)):
+        raise ValueError("point_cloud must contain only finite coordinates")
+    if len(point_cloud) == 0:
+        point_cloud = np.zeros((1, 3), dtype=np.float64)
     # Run ripser up to homology dimension 1 (H0 and H1)
     result = ripser(point_cloud, maxdim=1)
     dgms = result['dgms']
@@ -40,24 +56,10 @@ def compute_persistence_features(point_cloud):
     for dim in [0, 1]:
         dgm = dgms[dim]
         
-        # Filter out infinite death points if any (common in H0)
-        # Replacing inf death with max finite death + small buffer
-        finite_dgm = []
-        max_finite = 0.0
-        for birth, death in dgm:
-            if np.isfinite(death):
-                max_finite = max(max_finite, death)
-                finite_dgm.append([birth, death])
-                
-        # For infinite death features, replace death with 1.2 * max_finite
-        clean_dgm = []
-        for birth, death in dgm:
-            if not np.isfinite(death):
-                clean_dgm.append([birth, max_finite * 1.2 if max_finite > 0 else 1.0])
-            else:
-                clean_dgm.append([birth, death])
-                
-        clean_dgm = np.array(clean_dgm) if clean_dgm else np.empty((0, 2))
+        # Essential classes have infinite persistence and are not assigned an
+        # arbitrary finite death time. Summaries below describe finite bars only.
+        finite_dgm = dgm[np.isfinite(dgm).all(axis=1)]
+        clean_dgm = finite_dgm.copy()
         
         # Calculate statistics
         if len(clean_dgm) > 0:

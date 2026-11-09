@@ -1,0 +1,26 @@
+{
+  "accuracy_delta": {
+    "observed": -0.034375000000000044,
+    "scan_cluster_95ci": [
+      -0.05642763411408155,
+      -0.015503275973792247
+    ]
+  },
+  "sensitivity_delta": {
+    "observed": -0.06282722513089012,
+    "scan_cluster_95ci": [
+      -0.09895833333333337,
+      -0.030487804878048804
+    ]
+  },
+  "specificity_delta": {
+    "observed": 0.007751937984496138,
+    "scan_cluster_95ci": [
+      0.0,
+      0.02857142857142858
+    ]
+  },
+  "n_bootstrap": 5000,
+  "n_clusters": 58,
+  "seed": 42
+}

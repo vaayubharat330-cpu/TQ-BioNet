@@ -1,0 +1,339 @@
+{
+  "stage": "Stage 6E - LNDb Adaptation and Grouped Evaluation",
+  "date_utc": "2026-11-09 14:35:50",
+  "partitions": {
+    "development_folds": [
+      "Fold0",
+      "Fold1",
+      "Fold2"
+    ],
+    "development_samples": 899,
+    "development_scans": 171,
+    "held_out_fold": "Fold3",
+    "held_out_samples": 320,
+    "held_out_scans": 58,
+    "scan_overlap": 0
+  },
+  "conflicting_coordinates_audit": {
+    "conflict_count": 6,
+    "conflicting_rows": 12,
+    "audit_file": "conflicting_coordinates_audit.csv",
+    "fold3_fixed_prediction_sensitivity": {
+      "method": "Secondary fixed-prediction sensitivity analysis: for each exact same-scan physical coordinate with conflicting Nodule labels, retain the row with highest AgrLevel, then largest Volume, then smallest FindingID. No model retraining or probability changes.",
+      "primary_rows": 320,
+      "sensitivity_rows": 317,
+      "positive_count_after_representative_selection": 191,
+      "negative_count_after_representative_selection": 126,
+      "conflicting_coordinate_groups_fold3": 3,
+      "raw_rows_in_conflicting_groups_fold3": 6,
+      "removed_rows_due_to_conflict_collapse": 3,
+      "accuracy": 0.6908517350157729,
+      "balanced_accuracy": 0.6543256045873846,
+      "sensitivity": 0.8324607329842932,
+      "specificity": 0.47619047619047616,
+      "precision": 0.7066666666666667,
+      "f1": 0.7644230769230769,
+      "auc_roc": 0.6934056345051108,
+      "average_precision": 0.7743966375405061,
+      "brier_score": 0.21414119700650477,
+      "confusion_matrix": {
+        "tn": 60,
+        "fp": 66,
+        "fn": 32,
+        "tp": 159
+      },
+      "explicit_warning": "This changes the evaluation unit from finding rows to coordinate groups only for conflicting coordinates. It is sensitivity analysis, not an adjudicated ground truth or the primary Fold 3 estimate."
+    }
+  },
+  "paired_scan_cluster_baseline_comparison": {
+    "comparison": "adapted ensemble accuracy minus always-positive baseline accuracy",
+    "observed_accuracy_difference": 0.09062499999999996,
+    "scan_cluster_bootstrap_95ci": [
+      0.022651894769808913,
+      0.1636907409761058
+    ],
+    "bootstrap_replicates": 5000,
+    "unique_scan_clusters": 58,
+    "seed": 42,
+    "interpretation": "Paired resampling: each sampled scan contributes the same findings to both classifiers. CI above zero supports higher accuracy than the majority baseline under this scan-cluster resampling design."
+  },
+  "development_cross_validation_results": {
+    "Majority Baseline": {
+      "model": "majority",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.6418242491657397,
+      "balanced_accuracy": 0.5,
+      "sensitivity": 1.0,
+      "specificity": 0.0,
+      "precision": 0.6418242491657397,
+      "f1": 0.7818428184281843,
+      "auc_roc": 0.45659709140230587,
+      "average_precision": 0.6202297975997008,
+      "brier_score": 0.23165695401713715,
+      "confusion_matrix": {
+        "tn": 0,
+        "fp": 322,
+        "fn": 0,
+        "tp": 577
+      }
+    },
+    "Frozen Zero-Shot (v3.1)": {
+      "model": "frozen_v3_1",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.5661846496106785,
+      "balanced_accuracy": 0.5783233043047676,
+      "sensitivity": 0.5355285961871751,
+      "specificity": 0.6211180124223602,
+      "f1": 0.6130952380952381,
+      "auc_roc": 0.5991097667308954,
+      "average_precision": 0.7156215375045252,
+      "brier_score": 0.26758226733253304
+    },
+    "Adapted SVM (15 feat)": {
+      "model": "svm",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.6696329254727474,
+      "balanced_accuracy": 0.566269631957975,
+      "sensitivity": 0.9306759098786829,
+      "specificity": 0.20186335403726707,
+      "precision": 0.6763224181360201,
+      "f1": 0.7833698030634574,
+      "auc_roc": 0.6228457323702595,
+      "average_precision": 0.7186617823125836,
+      "brier_score": 0.2204768553289029,
+      "confusion_matrix": {
+        "tn": 65,
+        "fp": 257,
+        "fn": 40,
+        "tp": 537
+      }
+    },
+    "Adapted RF (15 feat)": {
+      "model": "rf",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.692992213570634,
+      "balanced_accuracy": 0.6180931569372531,
+      "sensitivity": 0.8821490467937608,
+      "specificity": 0.35403726708074534,
+      "precision": 0.7099023709902371,
+      "f1": 0.7867078825347759,
+      "auc_roc": 0.6598087128755503,
+      "average_precision": 0.7427067168717725,
+      "brier_score": 0.2121200149556292,
+      "confusion_matrix": {
+        "tn": 114,
+        "fp": 208,
+        "fn": 68,
+        "tp": 509
+      }
+    },
+    "Adapted XGB (15 feat)": {
+      "model": "xgb",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.6229143492769744,
+      "balanced_accuracy": 0.5984988750982271,
+      "sensitivity": 0.6845753899480069,
+      "specificity": 0.5124223602484472,
+      "precision": 0.7155797101449275,
+      "f1": 0.6997342781222321,
+      "auc_roc": 0.6394447614024135,
+      "average_precision": 0.7228171367902078,
+      "brier_score": 0.23706544546791924,
+      "confusion_matrix": {
+        "tn": 165,
+        "fp": 157,
+        "fn": 182,
+        "tp": 395
+      }
+    },
+    "Adapted ENSEMBLE (15 feat)": {
+      "model": "ensemble",
+      "features": "15_frozen",
+      "n_samples": 899,
+      "accuracy": 0.681868743047831,
+      "balanced_accuracy": 0.6190350603356405,
+      "sensitivity": 0.8405545927209706,
+      "specificity": 0.39751552795031053,
+      "precision": 0.7142857142857143,
+      "f1": 0.7722929936305732,
+      "auc_roc": 0.6503627673660075,
+      "average_precision": 0.7332121596251849,
+      "brier_score": 0.21554989874490055,
+      "confusion_matrix": {
+        "tn": 128,
+        "fp": 194,
+        "fn": 92,
+        "tp": 485
+      }
+    },
+    "Adapted RF (31 feat)": {
+      "model": "rf",
+      "features": "31_all",
+      "n_samples": 899,
+      "accuracy": 0.6696329254727474,
+      "balanced_accuracy": 0.5937193881395524,
+      "sensitivity": 0.8613518197573656,
+      "specificity": 0.32608695652173914,
+      "precision": 0.696078431372549,
+      "f1": 0.7699457784663052,
+      "auc_roc": 0.6439255304261708,
+      "average_precision": 0.7338088619122224,
+      "brier_score": 0.2188293710387995,
+      "confusion_matrix": {
+        "tn": 105,
+        "fp": 217,
+        "fn": 80,
+        "tp": 497
+      }
+    },
+    "Adapted ENSEMBLE (31 feat)": {
+      "model": "ensemble",
+      "features": "31_all",
+      "n_samples": 899,
+      "accuracy": 0.6562847608453838,
+      "balanced_accuracy": 0.5936144331894464,
+      "sensitivity": 0.8145580589254766,
+      "specificity": 0.37267080745341613,
+      "precision": 0.6994047619047619,
+      "f1": 0.7526020816653323,
+      "auc_roc": 0.6345064964422962,
+      "average_precision": 0.7202899865688197,
+      "brier_score": 0.2203868286703769,
+      "confusion_matrix": {
+        "tn": 120,
+        "fp": 202,
+        "fn": 107,
+        "tp": 470
+      }
+    }
+  },
+  "held_out_fold3_evaluation": {
+    "majority_baseline": {
+      "accuracy": 0.596875,
+      "positive_prevalence": 0.596875
+    },
+    "frozen_zero_shot_v3_1": {
+      "accuracy": 0.49375,
+      "balanced_accuracy": 0.5079751613295994,
+      "sensitivity": 0.43455497382198954,
+      "specificity": 0.5813953488372093,
+      "f1": 0.5060975609756098,
+      "auc_roc": 0.49799098989407037,
+      "average_precision": 0.634752939270709,
+      "brier_score": 0.3009553821672937
+    },
+    "adapted_ensemble_15_features": {
+      "n_samples": 320,
+      "majority_baseline_acc": 0.596875,
+      "accuracy": 0.6875,
+      "accuracy_95ci": [
+        0.6301638176638177,
+        0.7424764763140818
+      ],
+      "balanced_accuracy": 0.6526644750192784,
+      "sensitivity": 0.8324607329842932,
+      "specificity": 0.4728682170542636,
+      "precision": 0.7004405286343612,
+      "f1": 0.7607655502392344,
+      "f1_95ci": [
+        0.7030638803254663,
+        0.8106828916294936
+      ],
+      "auc_roc": 0.6913226997848939,
+      "auc_roc_95ci": [
+        0.6245189853107709,
+        0.7576260204598508
+      ],
+      "average_precision": 0.7692174170360255,
+      "brier_score": 0.21563770143551456,
+      "expected_calibration_error": 0.061747781922239675,
+      "confusion_matrix": {
+        "tn": 61,
+        "fp": 68,
+        "fn": 32,
+        "tp": 159
+      },
+      "agreement_stratification": {
+        "0": {
+          "n": 129,
+          "accuracy": 0.4728682170542636,
+          "positive_count": 0
+        },
+        "1": {
+          "n": 133,
+          "accuracy": 0.8120300751879699,
+          "positive_count": 133
+        },
+        "2": {
+          "n": 47,
+          "accuracy": 0.8723404255319149,
+          "positive_count": 47
+        },
+        "3": {
+          "n": 11,
+          "accuracy": 0.9090909090909091,
+          "positive_count": 11
+        }
+      }
+    },
+    "adapted_ensemble_31_features": {
+      "n_samples": 320,
+      "majority_baseline_acc": 0.596875,
+      "accuracy": 0.665625,
+      "accuracy_95ci": [
+        0.6125356125356125,
+        0.7182143883055121
+      ],
+      "balanced_accuracy": 0.6293071959089249,
+      "sensitivity": 0.8167539267015707,
+      "specificity": 0.4418604651162791,
+      "precision": 0.6842105263157895,
+      "f1": 0.7446300715990454,
+      "f1_95ci": [
+        0.6899577167019028,
+        0.7955068664169788
+      ],
+      "auc_roc": 0.6849303949023905,
+      "auc_roc_95ci": [
+        0.6146550138430614,
+        0.7576194104763216
+      ],
+      "average_precision": 0.7634798520480475,
+      "brier_score": 0.2158505162082379,
+      "expected_calibration_error": 0.02226676662586861,
+      "confusion_matrix": {
+        "tn": 57,
+        "fp": 72,
+        "fn": 35,
+        "tp": 156
+      },
+      "agreement_stratification": {
+        "0": {
+          "n": 129,
+          "accuracy": 0.4418604651162791,
+          "positive_count": 0
+        },
+        "1": {
+          "n": 133,
+          "accuracy": 0.7969924812030075,
+          "positive_count": 133
+        },
+        "2": {
+          "n": 47,
+          "accuracy": 0.8723404255319149,
+          "positive_count": 47
+        },
+        "3": {
+          "n": 11,
+          "accuracy": 0.8181818181818182,
+          "positive_count": 11
+        }
+      }
+    }
+  }
+}

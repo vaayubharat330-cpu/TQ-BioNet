@@ -119,32 +119,33 @@ def load_datasets():
     )
     return X_dev, y_dev, groups_dev, coords_dev, subsets_dev, X_val, y_val, groups_val, coords_val, subsets_val
 
-def verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val):
-    dev_patients = set(groups_dev)
-    val_patients = set(groups_val)
-    patient_overlap = dev_patients.intersection(val_patients)
-    print("Patients in development:", len(dev_patients))
-    print("Patients in validation (subset 6):", len(val_patients))
-    print("Patient overlap count:", len(patient_overlap))
-    print("PASS" if len(patient_overlap) == 0 else "FAIL", "- patient overlap")
-
-    dev_series = set(subsets_dev)
-    val_series = set(subsets_val)
-    series_overlap = dev_series.intersection(val_series)
+def verify_data_separation(X_dev, groups_dev, subsets_dev, X_val, groups_val, subsets_val):
+    dev_seriesuids = set(groups_dev)
+    val_seriesuids = set(groups_val)
+    series_overlap = dev_seriesuids.intersection(val_seriesuids)
+    print("SeriesUIDs in development:", len(dev_seriesuids))
+    print("SeriesUIDs in validation:", len(val_seriesuids))
     print("SeriesUID overlap count:", len(series_overlap))
-    print("PASS" if len(series_overlap) == 0 else "FAIL", "- seriesuid overlap")
+    if series_overlap:
+        raise RuntimeError("SeriesUID overlap detected between development and validation")
 
-    dev_dupes = len(groups_dev) != len(set(groups_dev))
-    val_dupes = len(groups_val) != len(set(groups_val))
-    print("Duplicate samples in development:", dev_dupes)
-    print("Duplicate samples in validation:", val_dupes)
-    print("PASS" if not dev_dupes and not val_dupes else "FAIL", "- duplicate detection")
+    dev_subset_ids = set(np.unique(subsets_dev).tolist())
+    val_subset_ids = set(np.unique(subsets_val).tolist())
+    subset_overlap = dev_subset_ids.intersection(val_subset_ids)
+    print("Development subset IDs:", sorted(dev_subset_ids))
+    print("Validation subset IDs:", sorted(val_subset_ids))
+    print("Subset overlap count:", len(subset_overlap))
+    if subset_overlap:
+        raise RuntimeError("Subset overlap detected between development and validation")
+    print("PASS - subset separation")
 
+    if len(X_dev) != len(groups_dev) or len(X_val) != len(groups_val):
+        raise RuntimeError("Feature/group row counts do not align")
     print("Development X shape:", X_dev.shape)
     print("Validation X shape:", X_val.shape)
-    print("NaNs in development X:", np.isnan(X_dev).any())
-    print("NaNs in validation X:", np.isnan(X_val).any())
-    print("PASS" if not np.isnan(X_dev).any() and not np.isnan(X_val).any() else "FAIL", "- NaN check")
+    if not np.isfinite(X_dev).all() or not np.isfinite(X_val).all():
+        raise RuntimeError("Non-finite feature values found in development or validation data")
+    print("PASS - feature arrays are finite and aligned with group IDs")
 
 # ------------------------------------------------------------
 # 3. Scaler leakage verification
@@ -155,21 +156,26 @@ def train_scaler(X_dev_selected):
     scaler.fit(X_dev_selected)
     return scaler
 
-def verify_scaler_leakage(scaler, X_val_selected):
-    try:
-        _ = scaler.transform(X_val_selected)
-        print("PASS - StandardScaler.transform used on validation only")
-    except Exception as e:
-        print("FAIL - Scaler transform error:", e)
+def verify_scaler_leakage(scaler, X_dev_selected, X_val_selected):
+    if not np.allclose(scaler.mean_, np.mean(X_dev_selected, axis=0)):
+        raise RuntimeError("Scaler mean does not match development features")
+    if not np.allclose(scaler.scale_, np.std(X_dev_selected, axis=0)):
+        raise RuntimeError("Scaler scale does not match development features")
+    transformed = scaler.transform(X_val_selected)
+    if transformed.shape != X_val_selected.shape or not np.all(np.isfinite(transformed)):
+        raise RuntimeError("Validation scaling produced invalid values")
+    print("PASS - scaler parameters are fitted from development data only")
 
 # ------------------------------------------------------------
 # 4. Model training (frozen)
 # ------------------------------------------------------------
-def train_models(conf, X_dev_selected, y_dev):
+def train_models(conf, X_dev_selected, y_dev, scaler=None):
+    if scaler is None:
+        scaler = train_scaler(X_dev_selected)
     svm = conf["svm"]
     xgb = conf["xgb"]
     rf = conf["rf"]
-    svm.fit(X_dev_selected, y_dev)
+    svm.fit(scaler.transform(X_dev_selected), y_dev)
     xgb.fit(X_dev_selected, y_dev)
     rf.fit(X_dev_selected, y_dev)
     return svm, xgb, rf
@@ -249,7 +255,7 @@ def evaluate_models(svm, xgb, rf, scaler, X_val_selected, y_val, groups_val, coo
 
     df_pred = pd.DataFrame({
         "seriesuid": groups_val,
-        "patient_id": groups_val,
+        "seriesuid": groups_val,
         "x": coords_val[:, 0],
         "y": coords_val[:, 1],
         "z": coords_val[:, 2],
@@ -291,7 +297,7 @@ def feature_audit(X_val, expected_dim, feature_order):
     dim_ok = X_val.shape[1] == expected_dim
     nan_ok = not np.isnan(X_val).any()
     inf_ok = not np.isinf(X_val).any()
-    order_ok = True
+    order_ok = (len(feature_order) == expected_dim and feature_order == sorted(feature_order))
     print("Feature dimension check:", "PASS" if dim_ok else "FAIL")
     print("NaN check:", "PASS" if nan_ok else "FAIL")
     print("Inf check:", "PASS" if inf_ok else "FAIL")
@@ -322,7 +328,7 @@ def reproducibility_study(conf, X_dev_sel, y_dev, X_val_sel, y_val, seeds=[42, 1
         )
         scaler = StandardScaler()
         scaler.fit(X_dev_sel)
-        svm.fit(X_dev_sel, y_dev)
+        svm.fit(scaler.transform(X_dev_sel), y_dev)
         xgb.fit(X_dev_sel, y_dev)
         rf.fit(X_dev_sel, y_dev)
         svm_probs = svm.predict_proba(scaler.transform(X_val_sel))[:, 1]
@@ -364,15 +370,15 @@ def reproducibility_study(conf, X_dev_sel, y_dev, X_val_sel, y_val, seeds=[42, 1
 # ------------------------------------------------------------
 def create_manifest(runtime_seconds, seed_used):
     manifest = {
-        "algorithm_version": "v3.0",
-        "feature_version": "v3.0",
+        "algorithm_version": "v3.1",
+        "feature_version": "v3.1",
         "random_seed": seed_used,
         "subset_list": [6],
         "training_subsets": [0, 1, 2, 3, 4, 5],
         "validation_subset": [6],
         "sha256": {
-            "subset6_X": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3" / "subset6" / "X.npy")),
-            "subset6_y": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3" / "subset6" / "y.npy")),
+            "subset6_X": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3_1" / "subset6" / "X.npy")),
+            "subset6_y": get_file_sha256(str(project_root / "luna16_data" / "cache" / "tq_bionet_v3_1" / "subset6" / "y.npy")),
         },
         "runtime_seconds": runtime_seconds,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -438,13 +444,13 @@ if __name__ == "__main__":
     start = time.time()
     conf = verify_frozen_configuration()
     X_dev, y_dev, groups_dev, coords_dev, subsets_dev, X_val, y_val, groups_val, coords_val, subsets_val = load_datasets()
-    verify_data_separation(groups_dev, groups_val, subsets_dev, subsets_val)
+    verify_data_separation(X_dev, groups_dev, subsets_dev, X_val, groups_val, subsets_val)
     sel_idx = [conf["all_features"].index(f) for f in conf["selected_features"]]
     X_dev_sel = X_dev[:, sel_idx]
     X_val_sel = X_val[:, sel_idx]
     scaler = train_scaler(X_dev_sel)
-    verify_scaler_leakage(scaler, X_val_sel)
-    svm, xgb, rf = train_models(conf, X_dev_sel, y_dev)
+    verify_scaler_leakage(scaler, X_dev_sel, X_val_sel)
+    svm, xgb, rf = train_models(conf, X_dev_sel, y_dev, scaler=scaler)
     metrics, pred_df = evaluate_models(svm, xgb, rf, scaler, X_val_sel, y_val, groups_val, coords_val)
     errors = error_analysis(pred_df)
     feature_audit_pass = feature_audit(X_val, expected_dim=31, feature_order=conf["feature_ordering"])

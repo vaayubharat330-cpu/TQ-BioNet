@@ -1,0 +1,71 @@
+{
+  "primary_policy_sens_80": {
+    "frozen_development_threshold": 0.52,
+    "nested_selection_results": {
+      "criterion": "sens_80",
+      "inner_thresholds_per_fold": {
+        "Fold0": 0.49,
+        "Fold1": 0.53,
+        "Fold2": 0.51
+      },
+      "mean_inner_threshold": 0.51,
+      "nested_accuracy": 0.6696329254727474,
+      "nested_balanced_accuracy": 0.6095029979439595,
+      "nested_sensitivity": 0.8214904679376083,
+      "nested_specificity": 0.39751552795031053,
+      "nested_youden_j": 0.21900599588791891,
+      "nested_confusion_matrix": {
+        "tn": 128,
+        "fp": 194,
+        "fn": 103,
+        "tp": 474
+      }
+    }
+  },
+  "secondary_policy_sens_75": {
+    "frozen_development_threshold": 0.53,
+    "nested_selection_results": {
+      "criterion": "sens_75",
+      "inner_thresholds_per_fold": {
+        "Fold0": 0.54,
+        "Fold1": 0.55,
+        "Fold2": 0.54
+      },
+      "mean_inner_threshold": 0.5433333333333333,
+      "nested_accuracy": 0.6407119021134594,
+      "nested_balanced_accuracy": 0.602070034554399,
+      "nested_sensitivity": 0.7383015597920277,
+      "nested_specificity": 0.4658385093167702,
+      "nested_youden_j": 0.204140069108798,
+      "nested_confusion_matrix": {
+        "tn": 150,
+        "fp": 172,
+        "fn": 151,
+        "tp": 426
+      }
+    }
+  },
+  "secondary_policy_youden": {
+    "frozen_development_threshold": 0.5,
+    "nested_selection_results": {
+      "criterion": "youden",
+      "inner_thresholds_per_fold": {
+        "Fold0": 0.5700000000000001,
+        "Fold1": 0.6599999999999999,
+        "Fold2": 0.63
+      },
+      "mean_inner_threshold": 0.62,
+      "nested_accuracy": 0.5984427141268076,
+      "nested_balanced_accuracy": 0.5972770918328902,
+      "nested_sensitivity": 0.6013864818024264,
+      "nested_specificity": 0.593167701863354,
+      "nested_youden_j": 0.19455418366578048,
+      "nested_confusion_matrix": {
+        "tn": 191,
+        "fp": 131,
+        "fn": 230,
+        "tp": 347
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "method": "Secondary fixed-prediction sensitivity analysis: for each exact same-scan physical coordinate with conflicting Nodule labels, retain the row with highest AgrLevel, then largest Volume, then smallest FindingID. No model retraining or probability changes.",
+  "primary_rows": 320,
+  "sensitivity_rows": 317,
+  "positive_count_after_representative_selection": 191,
+  "negative_count_after_representative_selection": 126,
+  "conflicting_coordinate_groups_fold3": 3,
+  "raw_rows_in_conflicting_groups_fold3": 6,
+  "removed_rows_due_to_conflict_collapse": 3,
+  "accuracy": 0.6908517350157729,
+  "balanced_accuracy": 0.6543256045873846,
+  "sensitivity": 0.8324607329842932,
+  "specificity": 0.47619047619047616,
+  "precision": 0.7066666666666667,
+  "f1": 0.7644230769230769,
+  "auc_roc": 0.6934056345051108,
+  "average_precision": 0.7743966375405061,
+  "brier_score": 0.21414119700650477,
+  "confusion_matrix": {
+    "tn": 60,
+    "fp": 66,
+    "fn": 32,
+    "tp": 159
+  },
+  "explicit_warning": "This changes the evaluation unit from finding rows to coordinate groups only for conflicting coordinates. It is sensitivity analysis, not an adjudicated ground truth or the primary Fold 3 estimate."
+}

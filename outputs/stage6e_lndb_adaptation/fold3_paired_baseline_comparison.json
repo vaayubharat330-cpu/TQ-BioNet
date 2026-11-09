@@ -1,0 +1,12 @@
+{
+  "comparison": "adapted ensemble accuracy minus always-positive baseline accuracy",
+  "observed_accuracy_difference": 0.09062499999999996,
+  "scan_cluster_bootstrap_95ci": [
+    0.022651894769808913,
+    0.1636907409761058
+  ],
+  "bootstrap_replicates": 5000,
+  "unique_scan_clusters": 58,
+  "seed": 42,
+  "interpretation": "Paired resampling: each sampled scan contributes the same findings to both classifiers. CI above zero supports higher accuracy than the majority baseline under this scan-cluster resampling design."
+}

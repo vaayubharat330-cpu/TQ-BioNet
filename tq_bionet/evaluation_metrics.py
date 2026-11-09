@@ -174,3 +174,49 @@ def plot_roc_pr_curves(y_test, svm_probs, xgb_probs, save_path_roc, save_path_pr
     
     print(f"      Successfully saved ROC curve plot to: {save_path_roc}")
     print(f"      Successfully saved Precision-Recall curve plot to: {save_path_pr}")
+
+
+def compute_cluster_bootstrap_ci(y_true, y_val, groups, metric_func, num_resamples=1000, confidence=0.95, random_seed=42):
+    """
+    Computes scan-cluster bootstrap confidence interval by resampling whole scans
+    (groups / SeriesUIDs) with replacement, preserving intra-scan correlations.
+    """
+    y_true = np.asarray(y_true)
+    y_val = np.asarray(y_val)
+    groups = np.asarray(groups)
+    
+    unique_groups = np.unique(groups)
+    n_groups = len(unique_groups)
+    if n_groups <= 0:
+        return 0.0, 0.0
+        
+    group_to_indices = {g: np.where(groups == g)[0] for g in unique_groups}
+    rng = np.random.default_rng(seed=random_seed)
+    scores = []
+    
+    for _ in range(num_resamples):
+        sampled_groups = rng.choice(unique_groups, size=n_groups, replace=True)
+        sample_indices = np.concatenate([group_to_indices[g] for g in sampled_groups])
+        
+        y_b = y_true[sample_indices]
+        v_b = y_val[sample_indices]
+        
+        # Verify both classes present
+        if len(np.unique(y_b)) > 1:
+            try:
+                score = metric_func(y_b, v_b)
+                if np.isfinite(score):
+                    scores.append(float(score))
+            except Exception:
+                pass
+                
+    if len(scores) == 0:
+        return 0.0, 0.0
+        
+    alpha = 1.0 - confidence
+    low_pct = 100 * (alpha / 2.0)
+    high_pct = 100 * (1.0 - alpha / 2.0)
+    
+    low = float(np.percentile(scores, low_pct))
+    high = float(np.percentile(scores, high_pct))
+    return low, high
